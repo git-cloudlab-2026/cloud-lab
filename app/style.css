@@ -1310,6 +1310,11 @@ td {
   color: var(--text-secondary);
 }
 
+td small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
 td.num,
 th.num {
   text-align: right;

@@ -503,7 +503,11 @@ function can(action, user = currentUser()) {
 
 function requirePermission(action) {
   if (can(action)) return true;
-  addEvent("permission_denied", `Action non autorisee: ${action}.`);
+  addEvent("permission_denied", `Action non autorisee: ${action}.`, {
+    severity: "warning",
+    targetType: "permission",
+    targetId: action
+  });
   alert("Action non autorisee pour votre role.");
   saveState();
   renderEvents();
@@ -512,15 +516,36 @@ function requirePermission(action) {
 }
 
 function normaliseAuditEvent(event, index) {
-  if (typeof event === "object" && event.type) return event;
+  if (typeof event === "object" && event.type) {
+    return {
+      id: event.id || index + 1,
+      at: event.at || CLOCK_NOW,
+      actorId: event.actorId ?? null,
+      actorName: event.actorName || "Systeme",
+      actorEmail: event.actorEmail || "",
+      actorRole: event.actorRole || "system",
+      type: event.type,
+      severity: event.severity || inferAuditSeverity(event.type),
+      targetType: event.targetType || "-",
+      targetId: event.targetId ?? "-",
+      scope: event.scope || "-",
+      detail: event.detail || ""
+    };
+  }
   const text = String(event);
   const parts = text.split(" - ");
   return {
     id: index + 1,
     at: parts.length > 1 ? parts[0].replace(" ", "T") : CLOCK_NOW,
+    actorId: null,
     actorName: "Systeme",
+    actorEmail: "",
     actorRole: "system",
     type: "legacy",
+    severity: "info",
+    targetType: "-",
+    targetId: "-",
+    scope: "-",
     detail: parts.length > 1 ? parts.slice(1).join(" - ") : text
   };
 }
@@ -642,7 +667,11 @@ function canTransition(current, next) {
 function transitionEntity(entity, nextStatus, timestampField) {
   if (entity.status === nextStatus) return true;
   if (!canTransition(entity.status, nextStatus)) {
-    addEvent(`Transition refusee: ${entity.status} -> ${nextStatus} pour #${entity.id}.`);
+    addEvent("transition_denied", `Transition refusee: ${entity.status} -> ${nextStatus} pour #${entity.id}.`, {
+      severity: "warning",
+      targetType: "state-machine",
+      targetId: entity.id
+    });
     return false;
   }
   entity.status = nextStatus;
@@ -756,16 +785,45 @@ function statusBadge(status) {
   return `<span class="badge status-${status}">${labels[status] || status}</span>`;
 }
 
-function addEvent(type, detail) {
+function inferAuditSeverity(type) {
+  if (["permission_denied", "navigation_error", "transition_denied", "request_refused"].includes(type)) return "warning";
+  if (["vm_destroyed"].includes(type)) return "danger";
+  if (["request_approved", "vm_provisioned", "request_created", "csv_exported", "login"].includes(type)) return "success";
+  return "info";
+}
+
+function auditSeverityBadge(severity) {
+  const labels = {
+    info: "Info",
+    success: "OK",
+    warning: "Attention",
+    danger: "Critique"
+  };
+  const statusClass = severity === "danger" ? "error" : severity === "warning" ? "expiring" : "active";
+  return `<span class="badge status-${statusClass}">${labels[severity] || severity}</span>`;
+}
+
+function formatAuditTarget(event) {
+  if (!event.targetType || event.targetType === "-") return "-";
+  return `${event.targetType} #${event.targetId ?? "-"}`;
+}
+
+function addEvent(type, detail, metadata = {}) {
   const actor = currentUser();
   const eventType = detail ? type : "info";
   const eventDetail = detail || type;
   state.events.unshift({
     id: Math.max(...state.events.map((event) => Number(event.id) || 0), 0) + 1,
     at: CLOCK_NOW,
+    actorId: actor?.id ?? null,
     actorName: actor?.fullName || "Systeme",
+    actorEmail: actor?.email || "",
     actorRole: actor?.role || "system",
+    severity: metadata.severity || inferAuditSeverity(eventType),
     type: eventType,
+    targetType: metadata.targetType || "-",
+    targetId: metadata.targetId ?? "-",
+    scope: metadata.scope || actor?.className || (isPrivileged(actor) ? "global" : "-"),
     detail: eventDetail
   });
 }
@@ -890,7 +948,11 @@ function isViewAllowed(viewName) {
 
 function setView(viewName) {
   if (!isViewAllowed(viewName)) {
-    addEvent("permission_denied", `Acces refuse a la vue ${viewName}.`);
+    addEvent("permission_denied", `Acces refuse a la vue ${viewName}.`, {
+      severity: "warning",
+      targetType: "view",
+      targetId: viewName
+    });
     alert("Acces reserve pour votre role.");
     saveState();
     return;
@@ -898,7 +960,11 @@ function setView(viewName) {
   document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
   const targetView = document.querySelector(`#view-${viewName}`);
   if (!targetView) {
-    addEvent("navigation_error", `Vue inconnue: ${viewName}.`);
+    addEvent("navigation_error", `Vue inconnue: ${viewName}.`, {
+      severity: "warning",
+      targetType: "view",
+      targetId: viewName
+    });
     alert("Vue inconnue.");
     saveState();
     return;
@@ -1010,7 +1076,12 @@ function loginAsSelectedUser() {
   window.setTimeout(() => {
     user.lastLoginAt = CLOCK_NOW;
     state.currentUser = buildAuthUser(user);
-    addEvent("login", `${user.fullName} connecte via Microsoft 365 mock.`);
+    addEvent("login", `${user.fullName} connecte via Microsoft 365 mock.`, {
+      severity: "success",
+      targetType: "user",
+      targetId: user.id,
+      scope: user.className || "global"
+    });
     saveState();
     renderAll();
     document.body.classList.remove("login-leaving");
@@ -1020,7 +1091,11 @@ function loginAsSelectedUser() {
 
 function logout() {
   const user = currentUser();
-  addEvent("logout", `${user?.fullName || "Utilisateur"} deconnecte.`);
+  addEvent("logout", `${user?.fullName || "Utilisateur"} deconnecte.`, {
+    severity: "info",
+    targetType: "user",
+    targetId: user?.id || "-"
+  });
   state.currentUser = null;
   saveState();
   renderAll();
@@ -1222,9 +1297,10 @@ function renderEvents() {
     .map((event) => `
       <div class="list-item compact">
         <div>
-          <strong>${event.type}</strong>
+          <strong>${event.type} - ${formatAuditTarget(event)}</strong>
           <span>${formatDateTime(event.at)} - ${event.actorName} (${roleLabel(event.actorRole)}) - ${event.detail}</span>
         </div>
+        ${auditSeverityBadge(event.severity)}
       </div>
     `)
     .join("");
@@ -1232,14 +1308,19 @@ function renderEvents() {
 
 function renderAuditFilters() {
   const typeSelect = document.querySelector("#auditTypeFilter");
+  const severitySelect = document.querySelector("#auditSeverityFilter");
   const actorSelect = document.querySelector("#auditActorFilter");
   const types = [...new Set(state.events.map((event) => event.type))].sort();
+  const severities = [...new Set(state.events.map((event) => event.severity))].sort();
   const actors = [...new Set(state.events.map((event) => event.actorName))].sort();
   const currentType = typeSelect.value;
+  const currentSeverity = severitySelect.value;
   const currentActor = actorSelect.value;
   typeSelect.innerHTML = `<option value="">Tous les types</option>${types.map((type) => `<option value="${type}">${type}</option>`).join("")}`;
+  severitySelect.innerHTML = `<option value="">Toutes gravites</option>${severities.map((severity) => `<option value="${severity}">${severity}</option>`).join("")}`;
   actorSelect.innerHTML = `<option value="">Tous les acteurs</option>${actors.map((actor) => `<option value="${actor}">${actor}</option>`).join("")}`;
   typeSelect.value = currentType;
+  severitySelect.value = currentSeverity;
   actorSelect.value = currentActor;
 }
 
@@ -1247,22 +1328,26 @@ function renderAudit() {
   const table = document.querySelector("#auditTable");
   if (!table) return;
   if (!can("viewAudit")) {
-    table.innerHTML = `<tr><td colspan="5">Acces reserve aux validateurs et admins.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="7">Acces reserve aux validateurs et admins.</td></tr>`;
     return;
   }
   renderAuditFilters();
   const typeFilter = document.querySelector("#auditTypeFilter").value;
+  const severityFilter = document.querySelector("#auditSeverityFilter").value;
   const actorFilter = document.querySelector("#auditActorFilter").value;
   table.innerHTML = state.events
     .filter((event) => !typeFilter || event.type === typeFilter)
+    .filter((event) => !severityFilter || event.severity === severityFilter)
     .filter((event) => !actorFilter || event.actorName === actorFilter)
     .sort((a, b) => toDate(b.at) - toDate(a.at))
     .map((event) => `
       <tr>
         <td>${formatDateTime(event.at)}</td>
-        <td>${event.actorName}</td>
+        <td>${event.actorName}<br><small>${event.actorEmail || "-"}</small></td>
         <td>${roleLabel(event.actorRole)}</td>
+        <td>${auditSeverityBadge(event.severity)}</td>
         <td>${event.type}</td>
+        <td>${formatAuditTarget(event)}</td>
         <td>${event.detail}</td>
       </tr>
     `)
@@ -1293,7 +1378,11 @@ function createRequest(event) {
   const maxQuantity = can("createGroupRequest", user) ? 20 : 1;
   if (quantity > maxQuantity) {
     alert("Action non autorisee pour votre role.");
-    addEvent("permission_denied", `Quantite ${quantity} refusee pour le role ${user.role}.`);
+    addEvent("permission_denied", `Quantite ${quantity} refusee pour le role ${user.role}.`, {
+      severity: "warning",
+      targetType: "request-quantity",
+      targetId: quantity
+    });
     saveState();
     renderAudit();
     return;
@@ -1322,7 +1411,12 @@ function createRequest(event) {
     destroyedAt: null
   };
   state.requests.push(request);
-  addEvent("request_created", `Nouvelle demande #${request.id} enregistree pour validation.`);
+  addEvent("request_created", `Nouvelle demande #${request.id} enregistree pour validation.`, {
+    severity: "success",
+    targetType: "request",
+    targetId: request.id,
+    scope: ownerForRequest(request)?.className || courseForRequest(request)?.className || "-"
+  });
   saveState();
   renderAll();
   setView("validation");
@@ -1337,7 +1431,12 @@ function approveRequest(id) {
   if (!transitionEntity(request, "approved", "approvedAt")) return;
   request.validatorId = currentUser().id;
   request.decisionComment = "Demande approuvee.";
-  addEvent("request_approved", `Demande #${request.id} approuvee. Provisioning pret a demarrer.`);
+  addEvent("request_approved", `Demande #${request.id} approuvee. Provisioning pret a demarrer.`, {
+    severity: "success",
+    targetType: "request",
+    targetId: request.id,
+    scope: ownerForRequest(request)?.className || courseForRequest(request)?.className || "-"
+  });
   saveState();
   renderAll();
 }
@@ -1348,7 +1447,12 @@ function refuseRequest(id) {
   if (!transitionEntity(request, "refused", null)) return;
   request.validatorId = currentUser().id;
   request.decisionComment = "Demande refusee.";
-  addEvent("request_refused", `Demande #${request.id} refusee.`);
+  addEvent("request_refused", `Demande #${request.id} refusee.`, {
+    severity: "warning",
+    targetType: "request",
+    targetId: request.id,
+    scope: ownerForRequest(request)?.className || courseForRequest(request)?.className || "-"
+  });
   saveState();
   renderAll();
 }
@@ -1412,7 +1516,12 @@ function provisionRequest(requestId) {
   request.provisionedAt = formatIsoLocal(demoProvisionedAt);
   refreshLifecycleStatuses();
   const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitee a ${targetQuantity}/${requestedQuantity} pour la demo.` : "";
-  addEvent("vm_provisioned", `${createdVms.length}/${targetQuantity} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`);
+  addEvent("vm_provisioned", `${createdVms.length}/${targetQuantity} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`, {
+    severity: "success",
+    targetType: "request",
+    targetId: request.id,
+    scope: owner.className || course.className
+  });
   saveState();
   renderAll();
 }
@@ -1432,7 +1541,12 @@ function destroyExpiredVms() {
     transitionEntity(vm, "destroyed", "destroyedAt");
     const request = byId(state.requests, vm.requestId);
     if (request && canTransition(request.status, "destroyed")) transitionEntity(request, "destroyed", "destroyedAt");
-    addEvent("vm_destroyed", `VM ${vm.name} detruite apres expiration. Cout reel: ${formatCost(realVmCost(vm))}.`);
+    addEvent("vm_destroyed", `VM ${vm.name} detruite apres expiration. Cout reel: ${formatCost(realVmCost(vm))}.`, {
+      severity: "danger",
+      targetType: "vm",
+      targetId: vm.id,
+      scope: byId(state.users, vm.ownerId)?.className || "-"
+    });
   });
   saveState();
   renderAll();
@@ -1485,7 +1599,11 @@ function exportRequests() {
     };
   });
   downloadCsv("demandes-vm.csv", toCsv(rows));
-  addEvent("csv_exported", "Export CSV des demandes genere.");
+  addEvent("csv_exported", "Export CSV des demandes genere.", {
+    severity: "success",
+    targetType: "export",
+    targetId: "requests"
+  });
   saveState();
   renderAll();
 }
@@ -1517,7 +1635,11 @@ function exportVms() {
     };
   });
   downloadCsv("machines-virtuelles.csv", toCsv(rows));
-  addEvent("csv_exported", "Export CSV des VM genere.");
+  addEvent("csv_exported", "Export CSV des VM genere.", {
+    severity: "success",
+    targetType: "export",
+    targetId: "vms"
+  });
   saveState();
   renderAll();
 }
@@ -1573,6 +1695,7 @@ document.querySelector("#mockLoginUsers").addEventListener("click", (event) => {
 });
 document.querySelector("#logoutButton").addEventListener("click", logout);
 document.querySelector("#auditTypeFilter").addEventListener("change", renderAudit);
+document.querySelector("#auditSeverityFilter").addEventListener("change", renderAudit);
 document.querySelector("#auditActorFilter").addEventListener("change", renderAudit);
 
 document.querySelector("#requestsTable").addEventListener("click", (event) => {
