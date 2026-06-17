@@ -1,0 +1,237 @@
+﻿<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloud Lab Control Center</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">GIT</span>
+      <div>
+        <strong>Cloud Lab</strong>
+        <small>Pilotage des environnements</small>
+      </div>
+    </div>
+    <nav aria-label="Navigation principale">
+      <button class="nav-item active" data-view="dashboard">Vue d'ensemble</button>
+      <button class="nav-item" data-view="catalog">Templates de cours</button>
+      <button class="nav-item" data-view="request">Nouvelle demande</button>
+      <button class="nav-item" data-view="validation">Demandes a valider</button>
+      <button class="nav-item" data-view="vms">Parc VM</button>
+    </nav>
+    <div class="sidebar-note">
+      <strong>Session pilote</strong>
+      <span>Tout est pret pour rejouer le parcours de demo sans dependance externe.</span>
+    </div>
+  </aside>
+
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Geneva Institute of Technology - Infomaniak Public Cloud - OpenStack</div>
+        <h1>Ravi de vous revoir</h1>
+        <p>Voici l'etat des environnements de cours, des couts et des machines proches de leur fin de vie.</p>
+      </div>
+      <div class="user-chip">
+        <div class="avatar" id="currentUserInitials" aria-hidden="true"><span>A</span></div>
+        <div>
+          <strong id="currentUserName">Administrateur Lab</strong>
+          <small id="currentUserRole">Pilotage cloud academique</small>
+        </div>
+      </div>
+    </header>
+
+    <section class="ops-strip" aria-label="Etat operationnel">
+      <div class="ops-item">
+        <span>Environnement</span>
+        <strong>Pilote pret</strong>
+      </div>
+      <div class="ops-item">
+        <span>Cloud</span>
+        <strong>Infomaniak OpenStack</strong>
+      </div>
+      <div class="ops-item">
+        <span>Parcours</span>
+        <strong>Demande -> VM -> fin de vie</strong>
+      </div>
+      <div class="ops-item">
+        <span>Regle cle</span>
+        <strong>Aucune VM sans date de fin</strong>
+      </div>
+    </section>
+
+    <section class="view active" id="view-dashboard">
+      <div class="section-head">
+        <div>
+          <h2>Ce qui demande votre attention</h2>
+          <p>Les demandes, les couts et les alertes importantes sont regroupes ici.</p>
+        </div>
+        <div class="quick-actions">
+          <span>Actions rapides</span>
+          <div class="actions">
+            <button class="ghost-button" id="exportRequestsButton">Demandes CSV</button>
+            <button class="ghost-button" id="exportVmsButton">VM CSV</button>
+            <button class="ghost-button" id="resetDataButton">Reinitialiser</button>
+          </div>
+        </div>
+      </div>
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <section class="panel live-flow">
+          <h3>Parcours suivi pendant la demo</h3>
+        <div class="flow-steps">
+          <div><span>1</span><strong>Demande</strong><small>besoin + echeance</small></div>
+          <div><span>2</span><strong>Validation</strong><small>decision rapide</small></div>
+          <div><span>3</span><strong>Provisioning</strong><small>creation cloud</small></div>
+          <div><span>4</span><strong>Configuration</strong><small>outils prets</small></div>
+          <div><span>5</span><strong>Monitoring</strong><small>suivi et couts</small></div>
+          <div><span>6</span><strong>Fin de vie</strong><small>nettoyage maitrise</small></div>
+        </div>
+      </section>
+      <div class="grid-two">
+        <section class="panel">
+          <h3>Alertes</h3>
+          <div id="alertsList" class="list"></div>
+        </section>
+        <section class="panel">
+          <h3>Budget par cours</h3>
+          <div id="courseCosts" class="list"></div>
+        </section>
+      </div>
+      <div class="grid-two">
+        <section class="panel">
+          <h3>Etat du cycle</h3>
+          <div id="lifecycleList" class="list"></div>
+        </section>
+        <section class="panel">
+          <h3>Dernieres actions</h3>
+          <div id="eventsList" class="list"></div>
+        </section>
+      </div>
+      <section class="panel data-proof">
+        <div>
+          <h3>Garanties data pour la revue</h3>
+          <p>Ces controles prouvent que le prototype suit les regles metier: dates de fin, couts, transitions et nettoyage.</p>
+        </div>
+        <div id="dataControlsList" class="proof-grid"></div>
+      </section>
+    </section>
+
+    <section class="view" id="view-catalog">
+      <div class="section-head">
+        <div>
+          <h2>Templates prets pour les cours</h2>
+          <p>Chaque template porte son flavor, son image, ses outils et son cout horaire.</p>
+        </div>
+      </div>
+      <div class="template-grid" id="templateGrid"></div>
+    </section>
+
+    <section class="view" id="view-request">
+      <div class="section-head">
+        <div>
+          <h2>Preparer un nouvel environnement</h2>
+          <p>Choisissez le cours, la duree et le volume de machines necessaire.</p>
+        </div>
+      </div>
+      <form class="panel form-panel" id="requestForm">
+        <div class="form-grid">
+          <label>
+            Demandeur
+            <select id="requesterId" required></select>
+          </label>
+          <label>
+            Template
+            <select id="templateId" required></select>
+          </label>
+          <label>
+            Quantite
+            <input type="number" id="quantity" min="1" max="20" value="1" required>
+          </label>
+          <label>
+            Date de debut
+            <input type="date" id="startDate" required>
+          </label>
+          <label>
+            Date de fin
+            <input type="date" id="endDate" required>
+          </label>
+          <label class="wide">
+            Raison de la demande
+            <textarea id="requestReason" rows="3" placeholder="Ex: TP Linux, projet web, lab data..." required></textarea>
+          </label>
+        </div>
+        <div class="estimate" id="requestEstimate">Cout estime : -</div>
+        <button class="primary-button" type="submit">Creer la demande</button>
+      </form>
+    </section>
+
+    <section class="view" id="view-validation">
+      <div class="section-head">
+        <div>
+          <h2>Demandes a valider</h2>
+          <p>Decidez avec le cout estime et l'echeance sous les yeux.</p>
+        </div>
+      </div>
+      <section class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Demandeur</th>
+                <th>Cours</th>
+                <th>Template</th>
+                <th>Quantite</th>
+                <th>Dates</th>
+                <th>Cout estime</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="requestsTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="view-vms">
+      <div class="section-head">
+        <div>
+          <h2>Parc des machines virtuelles</h2>
+          <p>Retrouvez les machines provisionnees, leur statut, leur reseau et leur date de fin.</p>
+        </div>
+        <div class="actions">
+          <button class="ghost-button" id="simulateProvisionButton">Provisionner demande approuvee</button>
+          <button class="ghost-button" id="destroyExpiredButton">Detruire VM expirees</button>
+        </div>
+      </div>
+      <section class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>VM</th>
+                <th>Proprietaire</th>
+                <th>IP</th>
+                <th>Statut</th>
+                <th>Reseau</th>
+                <th>Fin</th>
+                <th>Cout reel</th>
+                <th>Cout/h</th>
+              </tr>
+            </thead>
+            <tbody id="vmsTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
