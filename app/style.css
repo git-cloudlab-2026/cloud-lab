@@ -461,7 +461,7 @@ nav {
   grid-column: span 1;
 }
 
-.kpi:nth-child(6) {
+.kpi.kpi-featured {
   grid-column: span 2;
   min-height: 156px;
   height: 156px;
@@ -502,20 +502,15 @@ nav {
 .kpi-neutral::before { background: var(--neutral); }
 .kpi-accent::before { background: var(--accent-strong); }
 
-.kpi:nth-child(6)::after {
+.kpi.kpi-featured::after {
   content: "";
   position: absolute;
   left: 24px;
   right: 24px;
   bottom: 22px;
-  height: 16px;
-  opacity: 0.86;
-  background:
-    linear-gradient(90deg, rgba(126, 170, 153, 0.18), rgba(126, 170, 153, 0.78) 56%, rgba(189, 139, 88, 0.48)),
-    linear-gradient(90deg, transparent, rgba(232, 228, 216, 0.08), transparent);
-  background-size: 100% 2px, 100% 1px;
-  background-position: left 10px, left 15px;
-  background-repeat: no-repeat;
+  height: 3px;
+  opacity: 0.7;
+  background: linear-gradient(90deg, var(--accent), var(--warning));
   border-radius: 999px;
 }
 
@@ -540,7 +535,7 @@ nav {
   letter-spacing: -0.035em;
 }
 
-.kpi:nth-child(6) strong {
+.kpi.kpi-featured strong {
   color: var(--accent-strong);
   font-size: 52px;
   letter-spacing: -0.045em;
@@ -1049,7 +1044,7 @@ tbody tr:hover td {
     grid-column: span 1;
   }
 
-  .kpi:nth-child(6) {
+  .kpi-featured {
     grid-column: span 2;
   }
 
@@ -1131,7 +1126,7 @@ tbody tr:hover td {
 
   .kpi,
   .kpi:nth-child(1),
-  .kpi:nth-child(6) {
+  .kpi-featured {
     grid-column: 1;
   }
 

@@ -46,7 +46,7 @@ const STATUS_ORDER = ["pending", "approved", "provisioning", "active", "expiring
 const VALID_TRANSITIONS = {
   pending: ["approved", "refused", "error"],
   approved: ["provisioning", "refused", "error"],
-  provisioning: ["active", "error"],
+  provisioning: ["active", "error", "expired"],
   active: ["expiring", "expired", "error"],
   expiring: ["expired", "destroyed", "error"],
   expired: ["destroyed", "error"],
@@ -486,6 +486,7 @@ function transitionEntity(entity, nextStatus, timestampField) {
 }
 
 function templateForRequest(request) {
+  if (!request) return null;
   return byId(state.templates, request.templateId);
 }
 
@@ -499,23 +500,25 @@ function ownerForRequest(request) {
 
 function estimatedRequestCost(request) {
   const template = templateForRequest(request);
+  if (!template) return 0;
   return request.quantity * hoursBetween(request.startDate, request.endDate) * template.hourlyCostChf;
 }
 
 function realVmCost(vm) {
   const request = byId(state.requests, vm.requestId);
   const template = templateForRequest(request);
+  if (!template) return 0;
   const usageEnd = vm.destroyedAt || (["destroyed", "expired"].includes(vm.status) ? vm.endDate : CLOCK_NOW);
   return hoursBetween(vm.provisionedAt || vm.createdAt, usageEnd) * template.hourlyCostChf;
 }
 
-function remainingBudget(course, realCost) {
-  return Math.max(0, course.budgetChf - realCost);
+function remainingBudget(course, realCost, committedCost = 0) {
+  return Math.max(0, course.budgetChf - realCost - committedCost);
 }
 
-function budgetPercent(course, realCost) {
+function budgetPercent(course, realCost, committedCost = 0) {
   if (!course.budgetChf) return 0;
-  return Math.min(100, Math.round((realCost / course.budgetChf) * 100));
+  return Math.min(100, Math.round(((realCost + committedCost) / course.budgetChf) * 100));
 }
 
 function dataControls() {
@@ -525,6 +528,9 @@ function dataControls() {
   const pendingProvisioning = query.requests({ status: "approved" }).length;
   const expiredToDestroy = query.vms({ status: "expired" }).length;
   const totalReal = state.vms.reduce((sum, vm) => sum + realVmCost(vm), 0);
+  const totalCommitted = state.requests
+    .filter((request) => ["pending", "approved"].includes(request.status))
+    .reduce((sum, request) => sum + estimatedRequestCost(request), 0);
   const totalBudget = state.courses.reduce((sum, course) => sum + course.budgetChf, 0);
 
   return [
@@ -560,9 +566,9 @@ function dataControls() {
     },
     {
       label: "Budget consomme",
-      value: `${budgetPercent({ budgetChf: totalBudget }, totalReal)}%`,
-      detail: `${formatCost(totalReal)} reels sur ${formatCost(totalBudget)} disponibles.`,
-      tone: totalReal / totalBudget > 0.8 ? "danger" : "success"
+      value: `${budgetPercent({ budgetChf: totalBudget }, totalReal, totalCommitted)}%`,
+      detail: `${formatCost(totalReal)} reels + ${formatCost(totalCommitted)} engages sur ${formatCost(totalBudget)}.`,
+      tone: (totalReal + totalCommitted) / totalBudget > 0.8 ? "danger" : "success"
     }
   ];
 }
@@ -621,6 +627,7 @@ const query = {
   vms(filters = {}) {
     return state.vms.filter((vm) => {
       const request = byId(state.requests, vm.requestId);
+      if (!request) return false;
       if (filters.status && vm.status !== filters.status) return false;
       if (filters.courseId && request.courseId !== Number(filters.courseId)) return false;
       if (filters.userId && vm.ownerId !== Number(filters.userId)) return false;
@@ -649,25 +656,30 @@ const query = {
       const estimated = requests
         .filter((request) => request.status !== "refused")
         .reduce((sum, request) => sum + estimatedRequestCost(request), 0);
+      const committed = requests
+        .filter((request) => ["pending", "approved"].includes(request.status))
+        .reduce((sum, request) => sum + estimatedRequestCost(request), 0);
       const real = vms.reduce((sum, vm) => sum + realVmCost(vm), 0);
       return {
         course,
         requestCount: requests.length,
         estimated,
+        committed,
         real,
-        remaining: remainingBudget(course, real),
-        percent: budgetPercent(course, real)
+        remaining: remainingBudget(course, real, committed),
+        percent: budgetPercent(course, real, committed)
       };
     });
   },
   costByClass() {
     const map = new Map();
     state.courses.forEach((course) => {
-      map.set(course.className, { className: course.className, estimated: 0, real: 0 });
+      map.set(course.className, { className: course.className, estimated: 0, committed: 0, real: 0 });
     });
     query.costByCourse().forEach((item) => {
       const row = map.get(item.course.className);
       row.estimated += item.estimated;
+      row.committed += item.committed;
       row.real += item.real;
     });
     return [...map.values()];
@@ -700,7 +712,10 @@ function setView(viewName) {
 
 function renderKpis() {
   document.querySelector("#kpiGrid").innerHTML = query.kpis()
-    .map(([label, value, tone]) => `<div class="kpi kpi-${tone}"><span>${label}</span><strong>${value}</strong></div>`)
+    .map(([label, value, tone]) => {
+      const featuredClass = label === "Cout reel actuel" ? " kpi-featured" : "";
+      return `<div class="kpi kpi-${tone}${featuredClass}"><span>${label}</span><strong>${value}</strong></div>`;
+    })
     .join("");
 }
 
@@ -816,11 +831,11 @@ function renderAlerts() {
 
 function renderCourseCosts() {
   document.querySelector("#courseCosts").innerHTML = query.costByCourse()
-    .map(({ course, requestCount, estimated, real, remaining, percent }) => `
+    .map(({ course, requestCount, committed, real, remaining, percent }) => `
       <div class="list-item cost-row">
         <div>
           <strong>${course.name}</strong>
-          <span>${course.className} - ${requestCount} demande(s) - estime ${formatCost(estimated)} - reste ${formatCost(remaining)}</span>
+          <span>${course.className} - ${requestCount} demande(s) - estime en attente ${formatCost(committed)} - engage reel ${formatCost(real)} - reste ${formatCost(remaining)}</span>
           <div class="meter" aria-label="Budget consomme ${percent}%">
             <i style="width: ${percent}%"></i>
           </div>
@@ -955,31 +970,40 @@ function simulateProvisioning() {
   }
   const owner = ownerForRequest(request);
   const template = templateForRequest(request);
+  const course = courseForRequest(request);
   if (!transitionEntity(request, "provisioning", "provisioningAt")) return;
-  const vmId = Math.max(...state.vms.map((item) => item.id), 0) + 1;
+  const firstVmId = Math.max(...state.vms.map((item) => item.id), 0) + 1;
   const slug = owner.fullName.toLowerCase().split(" ")[0];
-  const vm = {
-    id: vmId,
-    requestId: request.id,
-    ownerId: owner.id,
-    providerVmId: `pilot-vm-${1000 + vmId}`,
-    name: `git-${template.slug}-${slug}-${String(vmId).padStart(3, "0")}`,
-    ip: `10.10.${request.courseId}.${20 + vmId}`,
-    status: "provisioning",
-    sshUser: "student",
-    sshKey: `SHA256:lab-${slug}`,
-    network: owner.className ? owner.className.toLowerCase() : `course-${request.courseId}`,
-    createdAt: CLOCK_NOW,
-    provisionedAt: null,
-    startDate: request.startDate,
-    endDate: request.endDate,
-    destroyedAt: null
-  };
-  state.vms.push(vm);
-  transitionEntity(vm, "active", "provisionedAt");
+  const network = owner.className ? owner.className.toLowerCase() : `course-${request.courseId}`;
+  const createdVms = [];
+
+  for (let index = 0; index < request.quantity; index += 1) {
+    const vmId = firstVmId + index;
+    const vm = {
+      id: vmId,
+      requestId: request.id,
+      ownerId: owner.id,
+      providerVmId: `pilot-vm-${1000 + vmId}`,
+      name: `git-${template.slug}-${slug}-${String(index + 1).padStart(3, "0")}`,
+      ip: `10.10.${request.courseId}.${20 + vmId}`,
+      status: "provisioning",
+      sshUser: "student",
+      sshKey: `SHA256:lab-${slug}`,
+      network,
+      createdAt: CLOCK_NOW,
+      provisionedAt: null,
+      startDate: request.startDate,
+      endDate: request.endDate,
+      destroyedAt: null
+    };
+    state.vms.push(vm);
+    transitionEntity(vm, "active", "provisionedAt");
+    createdVms.push(vm);
+  }
+
   transitionEntity(request, "active", "provisionedAt");
   refreshLifecycleStatuses();
-  addEvent(`VM ${vm.name} provisionnee pour la demande #${request.id}.`);
+  addEvent(`${createdVms.length} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).`);
   saveState();
   renderAll();
 }
