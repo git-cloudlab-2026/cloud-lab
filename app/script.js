@@ -1026,6 +1026,7 @@ function renderAuthShell() {
     button.disabled = !allowed;
     button.classList.toggle("is-disabled", !allowed);
     button.hidden = !allowed;
+    button.style.display = allowed ? "" : "none";
     button.title = allowed ? "" : "Acces reserve a certains roles";
   });
 

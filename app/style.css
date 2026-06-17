@@ -107,6 +107,10 @@ button {
   touch-action: manipulation;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
