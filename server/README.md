@@ -100,7 +100,7 @@ Le backend contient une table `notifications` pour informer les utilisateurs san
 Champs principaux :
 
 - `user_id` : destinataire de la notification.
-- `type` : categorie fonctionnelle (`vm_request_approved`, `vm_request_refused`, `vm_expiring_soon`, `vm_destroyed`).
+- `type` : categorie fonctionnelle (`vm_request_approved`, `vm_request_refused`, `vm_expiring_soon`, `vm_expired`, `vm_destroyed`).
 - `title` / `message` : contenu affichable dans le portail.
 - `is_read` : suivi lu/non lu.
 - `metadata` : contexte technique extensible (`request_id`, `vm_id`, `end_date`) pour eviter les doublons et relier la notification au cycle de vie.
@@ -110,7 +110,7 @@ Flux implemente :
 
 - Lorsqu'une demande VM est approuvee ou refusee via `PATCH /api/v1/vm-requests/:id`, le demandeur recoit automatiquement une notification.
 - Lorsqu'une VM passe au statut `destroyed`, le proprietaire recoit une notification `vm_destroyed`.
-- Un job `node-cron` tourne chaque jour a 08:00 et cree une notification `vm_expiring_soon` pour les VM dont l'echeance est proche, en evitant les doublons pour une meme VM le meme jour.
+- Un job `node-cron` tourne chaque jour a 08:00. Il marque d'abord les VM arrivees a echeance en `expired`, puis cree une notification `vm_expiring_soon` pour les VM dont l'echeance est proche, en evitant les doublons pour une meme VM le meme jour.
 
 Endpoints :
 
@@ -121,6 +121,39 @@ PATCH /api/v1/notifications/:id/read
 ```
 
 Un adaptateur email existe dans `server/src/services/emailAdapter.js`. Pour le pilote, il journalise les emails avec `console.log`. En production, il suffit de remplacer cette implementation par un provider SMTP Infomaniak Mail, SendGrid ou un service interne, sans changer les controleurs.
+
+## Cycle de vie des VM (partie data)
+
+Le backend gere la detection data de fin de vie, mais ne declenche aucune action d'infrastructure.
+
+Chaque jour a 08:00, un job planifie selectionne les `virtual_machines` dont :
+
+- `end_date <= CURRENT_DATE` ;
+- `status` n'est pas deja `expired` ;
+- `status` n'est pas deja `destroyed`.
+
+Pour chaque VM concernee, le backend :
+
+- met `virtual_machines.status = 'expired'` ;
+- cree un `audit_event` de type `vm_expired` ;
+- cree une notification `vm_expired` pour le proprietaire de la VM.
+
+Frontiere importante :
+
+- `expired` signifie : la VM est arrivee a echeance cote donnees et doit etre traitee.
+- `destroyed` signifie : la destruction reelle a ete confirmee cote cloud.
+
+Le backend ne marque jamais une VM `destroyed` tout seul. Seul le futur code d'infrastructure de Josue, apres suppression reelle dans Infomaniak/OpenStack, appellera :
+
+```http
+PATCH /api/v1/virtual-machines/:id/destruction-result
+```
+
+Pour afficher les VM arrivees a echeance et en attente de destruction reelle :
+
+```http
+GET /api/v1/virtual-machines?status=expired
+```
 
 ## Integration future provisioning
 
@@ -292,6 +325,7 @@ Le service PostgreSQL expose le port `5432`, le backend expose le port `3000`.
 - `PATCH /api/v1/vm-requests/:id`
 - `POST /api/v1/vm-requests/:id/provision`
 - `GET /api/v1/virtual-machines`
+- `GET /api/v1/virtual-machines?status=expired`
 - `PATCH /api/v1/virtual-machines/:id`
 - `PATCH /api/v1/virtual-machines/:id/provisioning-result`
 - `PATCH /api/v1/virtual-machines/:id/destruction-result`

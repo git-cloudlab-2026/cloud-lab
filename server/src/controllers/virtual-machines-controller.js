@@ -2,15 +2,31 @@ import { query, withTransaction } from "../db/pool.js";
 import { ApiError } from "../middlewares/error-handler.js";
 import { createNotification } from "../services/notificationService.js";
 
-export async function listVirtualMachines(_req, res) {
+const vmStatuses = ["creating", "running", "stopped", "down", "expired", "destroyed", "error"];
+
+export async function listVirtualMachines(req, res) {
+  const values = [];
+  const filters = [];
+
+  if (req.query.status) {
+    if (!vmStatuses.includes(req.query.status)) {
+      throw new ApiError(400, "invalid_vm_status", `Statut VM invalide: ${req.query.status}.`);
+    }
+    values.push(req.query.status);
+    filters.push(`vm.status = $${values.length}`);
+  }
+
+  const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+
   const { rows } = await query(`
     SELECT vm.*, u.full_name AS owner_name, r.course_id, c.name AS course_name
     FROM virtual_machines vm
     JOIN users u ON u.id = vm.owner_id
     JOIN vm_requests r ON r.id = vm.request_id
     JOIN courses c ON c.id = r.course_id
+    ${whereClause}
     ORDER BY vm.created_at DESC, vm.id DESC
-  `);
+  `, values);
   res.json({ data: rows });
 }
 

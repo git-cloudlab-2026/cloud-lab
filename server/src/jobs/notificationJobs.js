@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { query } from "../db/pool.js";
+import { query, withTransaction } from "../db/pool.js";
 import { createNotification } from "../services/notificationService.js";
 
 export async function createExpiringVmNotifications() {
@@ -43,14 +43,62 @@ export async function createExpiringVmNotifications() {
   return rows.length;
 }
 
-export function startNotificationJobs() {
-  cron.schedule("0 8 * * *", async () => {
-    try {
-      const count = await createExpiringVmNotifications();
-      console.log(`[notifications] ${count} notification(s) VM expiration creee(s).`);
-    } catch (error) {
-      console.error("[notifications] Echec du job VM expiration", error);
+export async function markExpiredVirtualMachines() {
+  return withTransaction(async (client) => {
+    const { rows: expiredVms } = await client.query(`
+      SELECT
+        vm.*,
+        u.email AS owner_email
+      FROM virtual_machines vm
+      JOIN users u ON u.id = vm.owner_id
+      WHERE vm.end_date <= CURRENT_DATE
+        AND vm.status NOT IN ('expired', 'destroyed')
+      FOR UPDATE OF vm
+    `);
+
+    for (const vm of expiredVms) {
+      await client.query(
+        `UPDATE virtual_machines
+         SET status = 'expired'
+         WHERE id = $1`,
+        [vm.id]
+      );
+
+      await client.query(
+        `INSERT INTO audit_events (actor_id, vm_id, request_id, event_type, severity, event_message)
+         VALUES (NULL, $1, $2, 'vm_expired', 'warning', $3)`,
+        [vm.id, vm.request_id, `VM #${vm.id} marquee expired automatiquement: end_date ${vm.end_date}. Aucune destruction cloud n'est declenchee.`]
+      );
+
+      await createNotification(
+        vm.owner_id,
+        "vm_expired",
+        "Votre VM est arrivee a echeance",
+        `La machine ${vm.name} est arrivee a echeance. Elle est maintenant en attente de destruction reelle par le service d'infrastructure.`,
+        {
+          client,
+          email: vm.owner_email,
+          metadata: {
+            vm_id: vm.id,
+            request_id: vm.request_id,
+            end_date: vm.end_date
+          }
+        }
+      );
     }
+
+    return expiredVms.length;
   });
 }
 
+export function startNotificationJobs() {
+  cron.schedule("0 8 * * *", async () => {
+    try {
+      const expiredCount = await markExpiredVirtualMachines();
+      const expiringCount = await createExpiringVmNotifications();
+      console.log(`[lifecycle] ${expiredCount} VM marquee(s) expired, ${expiringCount} notification(s) d'echeance proche creee(s).`);
+    } catch (error) {
+      console.error("[lifecycle] Echec du job de fin de vie VM", error);
+    }
+  });
+}
