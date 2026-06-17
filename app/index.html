@@ -21,6 +21,7 @@
       <button class="nav-item" data-view="request">Nouvelle demande</button>
       <button class="nav-item" data-view="validation">Demandes a valider</button>
       <button class="nav-item" data-view="vms">Parc VM</button>
+      <button class="nav-item" data-view="audit">Journal d'audit</button>
     </nav>
     <div class="sidebar-note">
       <strong>Session pilote</strong>
@@ -40,7 +41,9 @@
         <div>
           <strong id="currentUserName">Administrateur Lab</strong>
           <small id="currentUserRole">Pilotage cloud academique</small>
+          <span class="role-badge role-admin" id="currentUserBadge">Admin</span>
         </div>
+        <button class="ghost-button chip-logout" id="logoutButton" type="button">Se deconnecter</button>
       </div>
     </header>
 
@@ -60,6 +63,24 @@
       <div class="ops-item">
         <span>Regle cle</span>
         <strong>Aucune VM sans date de fin</strong>
+      </div>
+    </section>
+
+    <section class="view login-view" id="view-login">
+      <div class="login-card panel">
+        <div>
+          <div class="eyebrow">Microsoft 365 ready</div>
+          <h1>Connexion au portail cloud</h1>
+          <p>Choisissez un compte de demonstration. Le flux reproduit la structure d'une connexion O365 sans appel reseau.</p>
+        </div>
+        <div class="login-actions">
+          <button class="primary-button" id="mockMicrosoftLoginButton" type="button">Se connecter avec Microsoft 365</button>
+          <label>
+            Compte de demonstration
+            <select id="mockLoginUser"></select>
+          </label>
+          <p>Authentification simulee pour la demo. Integration Entra ID prevue en phase suivante.</p>
+        </div>
       </div>
     </section>
 
@@ -224,6 +245,35 @@
               </tr>
             </thead>
             <tbody id="vmsTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="view-audit">
+      <div class="section-head">
+        <div>
+          <h2>Journal d'audit</h2>
+          <p>Historique complet des actions, acteurs, roles et tentatives refusees.</p>
+        </div>
+        <div class="actions audit-filters">
+          <select id="auditTypeFilter" aria-label="Filtrer par type"></select>
+          <select id="auditActorFilter" aria-label="Filtrer par acteur"></select>
+        </div>
+      </div>
+      <section class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Acteur</th>
+                <th>Role</th>
+                <th>Type</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody id="auditTable"></tbody>
           </table>
         </div>
       </section>

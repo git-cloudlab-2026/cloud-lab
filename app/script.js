@@ -20,12 +20,35 @@
   - les prix ne sont pas poses au hasard: ils partent d'une reference publique Infomaniak
     4 CPU / 8 GB RAM / 50 GB stockage = 16.10 CHF/mois, hors TVA, puis sont proratises
     selon CPU/RAM/disque et convertis en cout horaire;
+  - Authentification mockee pour le pilote local. L'integration OIDC reelle contre
+    Entra ID necessitera un backend (client secret jamais expose cote front) - prevue
+    en phase suivante. Cette couche reproduit deja la structure d'un utilisateur
+    authentifie (id, role, claims) pour limiter le travail de migration.
   - les fonctions query.* evitent de dupliquer la logique dans chaque vue.
 */
 
 const STORAGE_KEY = "git-cloud-lab-control-center-v3";
 const CLOCK_NOW = "2026-06-17T10:00:00";
 const EXPIRING_THRESHOLD_HOURS = 24;
+
+const ROLE_LABELS = {
+  student: "Etudiant",
+  trainer: "Formateur",
+  validator: "Validateur",
+  admin: "Admin"
+};
+
+const PERMISSIONS = {
+  approveRequest: ["validator", "admin"],
+  refuseRequest: ["validator", "admin"],
+  provisionVm: ["validator", "admin"],
+  destroyExpiredVms: ["validator", "admin"],
+  resetData: ["admin"],
+  exportCsv: ["validator", "admin", "trainer"],
+  createGroupRequest: ["trainer", "validator", "admin"],
+  viewAudit: ["validator", "admin"],
+  createForOtherUser: ["validator", "admin"]
+};
 
 const PRICING_MODEL = {
   provider: "Infomaniak Public Cloud",
@@ -57,13 +80,14 @@ const VALID_TRANSITIONS = {
 
 const seed = {
   users: [
-    { id: 1, fullName: "Nadia Keller", email: "nadia.keller@git.example", role: "validator", className: "" },
-    { id: 2, fullName: "Marc Dubois", email: "marc.dubois@git.example", role: "trainer", className: "" },
-    { id: 3, fullName: "Amir Benali", email: "amir.benali@git.example", role: "student", className: "IT-2026-A" },
-    { id: 4, fullName: "Sara Nguyen", email: "sara.nguyen@git.example", role: "student", className: "IT-2026-A" },
-    { id: 5, fullName: "Leo Martin", email: "leo.martin@git.example", role: "student", className: "IT-2026-B" },
-    { id: 6, fullName: "Administrateur Lab", email: "admin@git.example", role: "admin", className: "" }
+    { id: 1, fullName: "Nadia Keller", email: "nadia.keller@git.example", role: "validator", className: "", provider: "entra-mock", entraObjectId: "mock-nadia-keller", lastLoginAt: null },
+    { id: 2, fullName: "Marc Dubois", email: "marc.dubois@git.example", role: "trainer", className: "IT-2026-A", provider: "entra-mock", entraObjectId: "mock-marc-dubois", lastLoginAt: null },
+    { id: 3, fullName: "Amir Benali", email: "amir.benali@git.example", role: "student", className: "IT-2026-A", provider: "entra-mock", entraObjectId: "mock-amir-benali", lastLoginAt: null },
+    { id: 4, fullName: "Sara Nguyen", email: "sara.nguyen@git.example", role: "student", className: "IT-2026-A", provider: "entra-mock", entraObjectId: "mock-sara-nguyen", lastLoginAt: null },
+    { id: 5, fullName: "Leo Martin", email: "leo.martin@git.example", role: "student", className: "IT-2026-B", provider: "entra-mock", entraObjectId: "mock-leo-martin", lastLoginAt: null },
+    { id: 6, fullName: "Administrateur Lab", email: "admin@git.example", role: "admin", className: "", provider: "entra-mock", entraObjectId: "mock-admin-lab", lastLoginAt: null }
   ],
+  currentUser: null,
   courses: [
     { id: 1, slug: "linux-admin", name: "Administration Linux", className: "IT-2026-A", budgetChf: 160 },
     { id: 2, slug: "dev-web", name: "Developpement Web", className: "IT-2026-A", budgetChf: 180 },
@@ -387,6 +411,13 @@ function normaliseState(input) {
   data.requests ||= [];
   data.vms ||= [];
   data.events ||= [];
+  data.currentUser ||= null;
+
+  data.users.forEach((user) => {
+    user.provider ||= "entra-mock";
+    user.entraObjectId ||= `mock-${user.fullName.toLowerCase().replaceAll(" ", "-")}`;
+    user.lastLoginAt ||= null;
+  });
 
   data.templates.forEach((template) => {
     template.pricing = computeTemplatePricing(template);
@@ -411,6 +442,12 @@ function normaliseState(input) {
     if (vm.status === "running") vm.status = "active";
   });
 
+  data.events = data.events.map((event, index) => normaliseAuditEvent(event, index));
+  if (data.currentUser) {
+    const freshUser = data.users.find((user) => user.id === Number(data.currentUser.id));
+    data.currentUser = freshUser ? buildAuthUser(freshUser) : null;
+  }
+
   return data;
 }
 
@@ -423,6 +460,89 @@ function normaliseNetworkSegment(network) {
 
 function byId(list, id) {
   return list.find((item) => item.id === Number(id));
+}
+
+function buildAuthUser(user) {
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    className: user.className,
+    provider: user.provider || "entra-mock",
+    entraObjectId: user.entraObjectId,
+    claims: {
+      name: user.fullName,
+      preferred_username: user.email,
+      oid: user.entraObjectId,
+      roles: [user.role]
+    }
+  };
+}
+
+function currentUser() {
+  return state.currentUser;
+}
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] || role || "Invite";
+}
+
+function can(action, user = currentUser()) {
+  return PERMISSIONS[action]?.includes(user?.role) ?? false;
+}
+
+function requirePermission(action) {
+  if (can(action)) return true;
+  addEvent("permission_denied", `Action non autorisee: ${action}.`);
+  alert("Action non autorisee pour votre role.");
+  saveState();
+  renderEvents();
+  renderAudit();
+  return false;
+}
+
+function normaliseAuditEvent(event, index) {
+  if (typeof event === "object" && event.type) return event;
+  const text = String(event);
+  const parts = text.split(" - ");
+  return {
+    id: index + 1,
+    at: parts.length > 1 ? parts[0].replace(" ", "T") : CLOCK_NOW,
+    actorName: "Systeme",
+    actorRole: "system",
+    type: "legacy",
+    detail: parts.length > 1 ? parts.slice(1).join(" - ") : text
+  };
+}
+
+function isPrivileged(user = currentUser()) {
+  return ["validator", "admin"].includes(user?.role);
+}
+
+function isRequestVisibleToUser(request, user = currentUser()) {
+  if (!user) return false;
+  if (isPrivileged(user)) return true;
+  if (user.role === "student") return request.requesterId === user.id;
+  if (user.role === "trainer") {
+    const requester = byId(state.users, request.requesterId);
+    const course = courseForRequest(request);
+    return requester?.className === user.className || course?.className === user.className || request.requesterId === user.id;
+  }
+  return false;
+}
+
+function isVmVisibleToUser(vm, user = currentUser()) {
+  if (!user) return false;
+  if (isPrivileged(user)) return true;
+  if (user.role === "student") return vm.ownerId === user.id;
+  if (user.role === "trainer") {
+    const owner = byId(state.users, vm.ownerId);
+    const request = byId(state.requests, vm.requestId);
+    const course = request ? courseForRequest(request) : null;
+    return owner?.className === user.className || course?.className === user.className || vm.ownerId === user.id;
+  }
+  return false;
 }
 
 function nowDate() {
@@ -543,16 +663,18 @@ function budgetPercent(course, realCost, committedCost = 0) {
 }
 
 function dataControls() {
-  const invalidDates = state.requests.filter((request) => toDate(request.endDate) <= toDate(request.startDate)).length;
-  const missingVmEndDate = state.vms.filter((vm) => !vm.endDate && vm.status !== "destroyed").length;
-  const missingCostTemplate = state.requests.filter((request) => !templateForRequest(request)).length;
+  const scopedRequests = query.requests();
+  const scopedVms = query.vms();
+  const invalidDates = scopedRequests.filter((request) => toDate(request.endDate) <= toDate(request.startDate)).length;
+  const missingVmEndDate = scopedVms.filter((vm) => !vm.endDate && vm.status !== "destroyed").length;
+  const missingCostTemplate = scopedRequests.filter((request) => !templateForRequest(request)).length;
   const pendingProvisioning = query.requests({ status: "approved" }).length;
   const expiredToDestroy = query.vms({ status: "expired" }).length;
-  const totalReal = state.vms.reduce((sum, vm) => sum + realVmCost(vm), 0);
-  const totalCommitted = state.requests
+  const totalReal = scopedVms.reduce((sum, vm) => sum + realVmCost(vm), 0);
+  const totalCommitted = scopedRequests
     .filter((request) => ["pending", "approved"].includes(request.status))
     .reduce((sum, request) => sum + estimatedRequestCost(request), 0);
-  const totalBudget = state.courses.reduce((sum, course) => sum + course.budgetChf, 0);
+  const totalBudget = query.costByCourse().reduce((sum, item) => sum + item.course.budgetChf, 0);
 
   return [
     {
@@ -609,9 +731,18 @@ function statusBadge(status) {
   return `<span class="badge status-${status}">${labels[status] || status}</span>`;
 }
 
-function addEvent(message) {
-  const stamp = new Date(CLOCK_NOW).toLocaleString("fr-CH");
-  state.events.unshift(`${stamp} - ${message}`);
+function addEvent(type, detail) {
+  const actor = currentUser();
+  const eventType = detail ? type : "info";
+  const eventDetail = detail || type;
+  state.events.unshift({
+    id: Math.max(...state.events.map((event) => Number(event.id) || 0), 0) + 1,
+    at: CLOCK_NOW,
+    actorName: actor?.fullName || "Systeme",
+    actorRole: actor?.role || "system",
+    type: eventType,
+    detail: eventDetail
+  });
 }
 
 function refreshLifecycleStatuses() {
@@ -637,6 +768,7 @@ function refreshLifecycleStatuses() {
 const query = {
   requests(filters = {}) {
     return state.requests.filter((request) => {
+      if (!filters.ignoreScope && !isRequestVisibleToUser(request)) return false;
       if (filters.status && request.status !== filters.status) return false;
       if (filters.courseId && request.courseId !== Number(filters.courseId)) return false;
       if (filters.userId && request.requesterId !== Number(filters.userId)) return false;
@@ -649,6 +781,7 @@ const query = {
     return state.vms.filter((vm) => {
       const request = byId(state.requests, vm.requestId);
       if (!request) return false;
+      if (!filters.ignoreScope && !isVmVisibleToUser(vm)) return false;
       if (filters.status && vm.status !== filters.status) return false;
       if (filters.courseId && request.courseId !== Number(filters.courseId)) return false;
       if (filters.userId && vm.ownerId !== Number(filters.userId)) return false;
@@ -658,7 +791,7 @@ const query = {
     });
   },
   alerts() {
-    return state.vms
+    return query.vms()
       .map((vm) => {
         const owner = byId(state.users, vm.ownerId);
         const left = hoursUntil(vm.endDate);
@@ -706,12 +839,13 @@ const query = {
     return [...map.values()];
   },
   kpis() {
-    const activeVms = query.vms().filter((vm) => ["active", "expiring"].includes(vm.status)).length;
+    const scopedVms = query.vms();
+    const activeVms = scopedVms.filter((vm) => ["active", "expiring"].includes(vm.status)).length;
     const pending = query.requests({ status: "pending" }).length;
     const expired = query.vms({ status: "expired" }).length;
     const error = query.vms({ status: "error" }).length;
     const destroyed = query.vms({ status: "destroyed" }).length;
-    const realCost = state.vms.reduce((sum, vm) => sum + realVmCost(vm), 0);
+    const realCost = scopedVms.reduce((sum, vm) => sum + realVmCost(vm), 0);
     return [
       ["VM actives", activeVms, "success"],
       ["Demandes en attente", pending, "warning"],
@@ -723,12 +857,100 @@ const query = {
   }
 };
 
+function isViewAllowed(viewName) {
+  if (!currentUser()) return viewName === "login";
+  if (viewName === "audit") return can("viewAudit");
+  return true;
+}
+
 function setView(viewName) {
+  if (!isViewAllowed(viewName)) {
+    addEvent("permission_denied", `Acces refuse a la vue ${viewName}.`);
+    alert("Acces reserve pour votre role.");
+    saveState();
+    return;
+  }
   document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
   document.querySelector(`#view-${viewName}`).classList.add("active");
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === viewName);
   });
+}
+
+function roleBadgeClass(role) {
+  return `role-${role || "guest"}`;
+}
+
+function renderAuthShell() {
+  const user = currentUser();
+  document.body.classList.toggle("is-logged-out", !user);
+  document.querySelector(".sidebar").hidden = !user;
+  document.querySelector(".topbar").hidden = !user;
+  document.querySelector(".ops-strip").hidden = !user;
+
+  if (!user) {
+    setView("login");
+    return;
+  }
+
+  document.querySelector("#currentUserInitials span").textContent = user.fullName.charAt(0);
+  document.querySelector("#currentUserName").textContent = user.fullName;
+  document.querySelector("#currentUserRole").textContent = `${roleLabel(user.role)} - ${user.email}`;
+  const badge = document.querySelector("#currentUserBadge");
+  badge.textContent = roleLabel(user.role);
+  badge.className = `role-badge ${roleBadgeClass(user.role)}`;
+
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    const allowed = isViewAllowed(button.dataset.view);
+    button.disabled = !allowed;
+    button.classList.toggle("is-disabled", !allowed);
+    button.title = allowed ? "" : "Acces reserve";
+  });
+
+  document.querySelector('[data-view="validation"]').textContent = isPrivileged(user) ? "Demandes a valider" : "Mes demandes";
+  document.querySelector('[data-view="vms"]').textContent = isPrivileged(user) ? "Parc VM" : "Mes VM";
+}
+
+function setActionState(selector, allowed) {
+  const element = document.querySelector(selector);
+  if (!element) return;
+  element.disabled = !allowed;
+  element.classList.toggle("is-disabled", !allowed);
+  element.title = allowed ? "" : "Acces reserve";
+}
+
+function renderPermissionStates() {
+  setActionState("#exportRequestsButton", can("exportCsv"));
+  setActionState("#exportVmsButton", can("exportCsv"));
+  setActionState("#resetDataButton", can("resetData"));
+  setActionState("#simulateProvisionButton", can("provisionVm"));
+  setActionState("#destroyExpiredButton", can("destroyExpiredVms"));
+}
+
+function renderLoginUsers() {
+  const select = document.querySelector("#mockLoginUser");
+  select.innerHTML = state.users
+    .map((user) => `<option value="${user.id}">${user.fullName} - ${roleLabel(user.role)}</option>`)
+    .join("");
+}
+
+function loginAsSelectedUser() {
+  const user = byId(state.users, document.querySelector("#mockLoginUser").value);
+  if (!user) return;
+  user.lastLoginAt = CLOCK_NOW;
+  state.currentUser = buildAuthUser(user);
+  addEvent("login", `${user.fullName} connecte via Microsoft 365 mock.`);
+  saveState();
+  renderAll();
+  setView("dashboard");
+}
+
+function logout() {
+  const user = currentUser();
+  addEvent("logout", `${user?.fullName || "Utilisateur"} deconnecte.`);
+  state.currentUser = null;
+  saveState();
+  renderAuthShell();
 }
 
 function renderKpis() {
@@ -765,11 +987,16 @@ function renderCatalog() {
 }
 
 function renderSelectors() {
+  const user = currentUser();
   const requesterSelect = document.querySelector("#requesterId");
-  requesterSelect.innerHTML = state.users
-    .filter((user) => ["student", "trainer"].includes(user.role))
-    .map((user) => `<option value="${user.id}">${user.fullName} - ${user.role}</option>`)
+  const requesterOptions = can("createForOtherUser", user)
+    ? state.users.filter((item) => ["student", "trainer"].includes(item.role))
+    : state.users.filter((item) => item.id === user?.id);
+  requesterSelect.innerHTML = requesterOptions
+    .map((item) => `<option value="${item.id}">${item.fullName} - ${roleLabel(item.role)}</option>`)
     .join("");
+  requesterSelect.value = can("createForOtherUser", user) ? requesterSelect.value || requesterOptions[0]?.id : user?.id || "";
+  requesterSelect.disabled = !can("createForOtherUser", user);
 
   const templateSelect = document.querySelector("#templateId");
   templateSelect.innerHTML = state.templates
@@ -781,6 +1008,9 @@ function renderSelectors() {
 
   document.querySelector("#startDate").value ||= "2026-06-17";
   document.querySelector("#endDate").value ||= "2026-06-24";
+  const quantityInput = document.querySelector("#quantity");
+  quantityInput.max = can("createGroupRequest", user) ? 20 : 1;
+  if (!can("createGroupRequest", user)) quantityInput.value = 1;
 }
 
 function renderRequests() {
@@ -790,11 +1020,13 @@ function renderRequests() {
       const course = courseForRequest(request);
       const template = templateForRequest(request);
       const actions = [];
-      if (request.status === "pending") {
+      if (request.status === "pending" && can("approveRequest")) {
         actions.push(`<button class="action-button approve" data-approve="${request.id}">Approuver</button>`);
+      }
+      if (request.status === "pending" && can("refuseRequest")) {
         actions.push(`<button class="action-button refuse" data-refuse="${request.id}">Refuser</button>`);
       }
-      if (request.status === "approved") {
+      if (request.status === "approved" && can("provisionVm")) {
         actions.push(`<button class="action-button approve" data-provision="${request.id}">Provisionner</button>`);
       }
       return `
@@ -912,10 +1144,49 @@ function renderEvents() {
     .map((event) => `
       <div class="list-item compact">
         <div>
-          <strong>Audit</strong>
-          <span>${event}</span>
+          <strong>${event.type}</strong>
+          <span>${formatDateTime(event.at)} - ${event.actorName} (${roleLabel(event.actorRole)}) - ${event.detail}</span>
         </div>
       </div>
+    `)
+    .join("");
+}
+
+function renderAuditFilters() {
+  const typeSelect = document.querySelector("#auditTypeFilter");
+  const actorSelect = document.querySelector("#auditActorFilter");
+  const types = [...new Set(state.events.map((event) => event.type))].sort();
+  const actors = [...new Set(state.events.map((event) => event.actorName))].sort();
+  const currentType = typeSelect.value;
+  const currentActor = actorSelect.value;
+  typeSelect.innerHTML = `<option value="">Tous les types</option>${types.map((type) => `<option value="${type}">${type}</option>`).join("")}`;
+  actorSelect.innerHTML = `<option value="">Tous les acteurs</option>${actors.map((actor) => `<option value="${actor}">${actor}</option>`).join("")}`;
+  typeSelect.value = currentType;
+  actorSelect.value = currentActor;
+}
+
+function renderAudit() {
+  const table = document.querySelector("#auditTable");
+  if (!table) return;
+  if (!can("viewAudit")) {
+    table.innerHTML = `<tr><td colspan="5">Acces reserve aux validateurs et admins.</td></tr>`;
+    return;
+  }
+  renderAuditFilters();
+  const typeFilter = document.querySelector("#auditTypeFilter").value;
+  const actorFilter = document.querySelector("#auditActorFilter").value;
+  table.innerHTML = state.events
+    .filter((event) => !typeFilter || event.type === typeFilter)
+    .filter((event) => !actorFilter || event.actorName === actorFilter)
+    .sort((a, b) => toDate(b.at) - toDate(a.at))
+    .map((event) => `
+      <tr>
+        <td>${formatDateTime(event.at)}</td>
+        <td>${event.actorName}</td>
+        <td>${roleLabel(event.actorRole)}</td>
+        <td>${event.type}</td>
+        <td>${event.detail}</td>
+      </tr>
     `)
     .join("");
 }
@@ -932,19 +1203,26 @@ function updateEstimate() {
 
 function createRequest(event) {
   event.preventDefault();
+  const user = currentUser();
+  if (!user) {
+    alert("Vous devez etre connecte.");
+    return;
+  }
   const template = byId(state.templates, document.querySelector("#templateId").value);
   const startDate = document.querySelector("#startDate").value;
   const endDate = document.querySelector("#endDate").value;
+  const quantity = Number(document.querySelector("#quantity").value);
+  if (quantity > 1 && !requirePermission("createGroupRequest")) return;
   if (new Date(endDate) <= new Date(startDate)) {
     alert("La date de fin doit etre apres la date de debut.");
     return;
   }
   const request = {
     id: Math.max(...state.requests.map((item) => item.id), 0) + 1,
-    requesterId: Number(document.querySelector("#requesterId").value),
+    requesterId: can("createForOtherUser", user) ? Number(document.querySelector("#requesterId").value) : user.id,
     courseId: template.courseId,
     templateId: template.id,
-    quantity: Number(document.querySelector("#quantity").value),
+    quantity,
     startDate,
     endDate,
     status: "pending",
@@ -958,7 +1236,7 @@ function createRequest(event) {
     destroyedAt: null
   };
   state.requests.push(request);
-  addEvent(`Nouvelle demande #${request.id} enregistree pour validation.`);
+  addEvent("request_created", `Nouvelle demande #${request.id} enregistree pour validation.`);
   saveState();
   renderAll();
   setView("validation");
@@ -968,26 +1246,29 @@ function createRequest(event) {
 }
 
 function approveRequest(id) {
+  if (!requirePermission("approveRequest")) return;
   const request = byId(state.requests, id);
   if (!transitionEntity(request, "approved", "approvedAt")) return;
-  request.validatorId = 1;
+  request.validatorId = currentUser().id;
   request.decisionComment = "Demande approuvee.";
-  addEvent(`Demande #${request.id} approuvee. Provisioning pret a demarrer.`);
+  addEvent("request_approved", `Demande #${request.id} approuvee. Provisioning pret a demarrer.`);
   saveState();
   renderAll();
 }
 
 function refuseRequest(id) {
+  if (!requirePermission("refuseRequest")) return;
   const request = byId(state.requests, id);
   if (!transitionEntity(request, "refused", null)) return;
-  request.validatorId = 1;
+  request.validatorId = currentUser().id;
   request.decisionComment = "Demande refusee.";
-  addEvent(`Demande #${request.id} refusee.`);
+  addEvent("request_refused", `Demande #${request.id} refusee.`);
   saveState();
   renderAll();
 }
 
 function provisionRequest(requestId) {
+  if (!requirePermission("provisionVm")) return;
   const request = requestId ? byId(state.requests, requestId) : state.requests.find((item) => item.status === "approved");
   if (!request) {
     alert("Aucune demande approuvee a provisionner.");
@@ -1045,7 +1326,7 @@ function provisionRequest(requestId) {
   request.provisionedAt = formatIsoLocal(demoProvisionedAt);
   refreshLifecycleStatuses();
   const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitee a ${targetQuantity}/${requestedQuantity} pour la demo.` : "";
-  addEvent(`${createdVms.length}/${targetQuantity} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`);
+  addEvent("vm_provisioned", `${createdVms.length}/${targetQuantity} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`);
   saveState();
   renderAll();
 }
@@ -1055,6 +1336,7 @@ function simulateProvisioning() {
 }
 
 function destroyExpiredVms() {
+  if (!requirePermission("destroyExpiredVms")) return;
   const expired = state.vms.filter((vm) => vm.status === "expired");
   if (expired.length === 0) {
     alert("Aucune VM expiree a detruire.");
@@ -1064,7 +1346,7 @@ function destroyExpiredVms() {
     transitionEntity(vm, "destroyed", "destroyedAt");
     const request = byId(state.requests, vm.requestId);
     if (request && canTransition(request.status, "destroyed")) transitionEntity(request, "destroyed", "destroyedAt");
-    addEvent(`VM ${vm.name} detruite apres expiration. Cout reel: ${formatCost(realVmCost(vm))}.`);
+    addEvent("vm_destroyed", `VM ${vm.name} detruite apres expiration. Cout reel: ${formatCost(realVmCost(vm))}.`);
   });
   saveState();
   renderAll();
@@ -1089,6 +1371,7 @@ function downloadCsv(filename, csv) {
 }
 
 function exportRequests() {
+  if (!requirePermission("exportCsv")) return;
   const rows = query.requests().map((request) => {
     const user = ownerForRequest(request);
     const course = courseForRequest(request);
@@ -1116,12 +1399,13 @@ function exportRequests() {
     };
   });
   downloadCsv("demandes-vm.csv", toCsv(rows));
-  addEvent("Export CSV des demandes genere.");
+  addEvent("csv_exported", "Export CSV des demandes genere.");
   saveState();
   renderAll();
 }
 
 function exportVms() {
+  if (!requirePermission("exportCsv")) return;
   const rows = query.vms().map((vm) => {
     const owner = byId(state.users, vm.ownerId);
     const request = byId(state.requests, vm.requestId);
@@ -1147,13 +1431,15 @@ function exportVms() {
     };
   });
   downloadCsv("machines-virtuelles.csv", toCsv(rows));
-  addEvent("Export CSV des VM genere.");
+  addEvent("csv_exported", "Export CSV des VM genere.");
   saveState();
   renderAll();
 }
 
 function renderAll() {
   refreshLifecycleStatuses();
+  renderLoginUsers();
+  renderAuthShell();
   renderKpis();
   renderCatalog();
   renderSelectors();
@@ -1163,7 +1449,9 @@ function renderAll() {
   renderCourseCosts();
   renderLifecycle();
   renderEvents();
+  renderAudit();
   renderDataControls();
+  renderPermissionStates();
 }
 
 document.querySelectorAll(".nav-item").forEach((button) => {
@@ -1180,10 +1468,16 @@ document.querySelector("#destroyExpiredButton").addEventListener("click", destro
 document.querySelector("#exportRequestsButton").addEventListener("click", exportRequests);
 document.querySelector("#exportVmsButton").addEventListener("click", exportVms);
 document.querySelector("#resetDataButton").addEventListener("click", () => {
+  if (!requirePermission("resetData")) return;
   localStorage.removeItem(STORAGE_KEY);
   state = structuredClone(seed);
+  state = normaliseState(state);
   renderAll();
 });
+document.querySelector("#mockMicrosoftLoginButton").addEventListener("click", loginAsSelectedUser);
+document.querySelector("#logoutButton").addEventListener("click", logout);
+document.querySelector("#auditTypeFilter").addEventListener("change", renderAudit);
+document.querySelector("#auditActorFilter").addEventListener("change", renderAudit);
 
 document.querySelector("#requestsTable").addEventListener("click", (event) => {
   const approve = event.target.closest("[data-approve]");
