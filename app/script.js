@@ -411,7 +411,8 @@ function normaliseState(input) {
   data.requests ||= [];
   data.vms ||= [];
   data.events ||= [];
-  data.currentUser ||= null;
+  // La session mockee n'est pas restauree depuis localStorage: un choix explicite est requis a chaque chargement.
+  data.currentUser = null;
 
   data.users.forEach((user) => {
     user.provider ||= "entra-mock";
@@ -443,10 +444,6 @@ function normaliseState(input) {
   });
 
   data.events = data.events.map((event, index) => normaliseAuditEvent(event, index));
-  if (data.currentUser) {
-    const freshUser = data.users.find((user) => user.id === Number(data.currentUser.id));
-    data.currentUser = freshUser ? buildAuthUser(freshUser) : null;
-  }
 
   return data;
 }
@@ -891,17 +888,30 @@ function initialsFor(name) {
     .toUpperCase();
 }
 
+function renderLoginView() {
+  document.body.classList.remove("is-authenticated", "login-leaving");
+  document.body.classList.add("is-logged-out");
+  document.querySelector(".sidebar").hidden = true;
+  document.querySelector(".topbar").hidden = true;
+  document.querySelector(".ops-strip").hidden = true;
+  document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+  document.querySelector("#view-login").classList.add("active");
+  renderLoginUsers();
+}
+
 function renderAuthShell() {
   const user = currentUser();
-  document.body.classList.toggle("is-logged-out", !user);
-  document.querySelector(".sidebar").hidden = !user;
-  document.querySelector(".topbar").hidden = !user;
-  document.querySelector(".ops-strip").hidden = !user;
-
   if (!user) {
-    setView("login");
+    renderLoginView();
     return;
   }
+
+  document.body.classList.add("is-authenticated");
+  document.body.classList.remove("is-logged-out");
+  document.querySelector(".sidebar").hidden = false;
+  document.querySelector(".topbar").hidden = false;
+  document.querySelector(".ops-strip").hidden = false;
+  document.querySelector("#view-login").classList.remove("active");
 
   document.querySelector("#currentUserInitials span").textContent = user.fullName.charAt(0);
   document.querySelector("#currentUserName").textContent = user.fullName;
@@ -977,7 +987,7 @@ function logout() {
   addEvent("logout", `${user?.fullName || "Utilisateur"} deconnecte.`);
   state.currentUser = null;
   saveState();
-  renderAuthShell();
+  renderAll();
 }
 
 function renderKpis() {
@@ -1464,8 +1474,12 @@ function exportVms() {
 }
 
 function renderAll() {
+  if (!currentUser()) {
+    renderLoginView();
+    return;
+  }
+
   refreshLifecycleStatuses();
-  renderLoginUsers();
   renderAuthShell();
   renderKpis();
   renderCatalog();

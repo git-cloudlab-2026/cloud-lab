@@ -203,6 +203,50 @@ p {
   display: block;
 }
 
+/* Etat initial volontairement ferme: avant le premier rendu JS, le shell authentifie
+   ne doit jamais apparaitre derriere l'ecran de connexion. */
+body:not(.is-authenticated) {
+  display: block;
+}
+
+body:not(.is-authenticated) .shell {
+  width: 100%;
+}
+
+body:not(.is-authenticated) .sidebar,
+body:not(.is-authenticated) .topbar,
+body:not(.is-authenticated) .ops-strip,
+body:not(.is-authenticated) .view:not(#view-login) {
+  display: none !important;
+}
+
+body:not(.is-authenticated) #view-login {
+  min-height: 100vh;
+  display: grid !important;
+  place-items: center;
+  max-width: none;
+  padding: var(--space-5);
+  background:
+    radial-gradient(circle at 50% 34%, rgba(91, 140, 123, 0.17), transparent 360px),
+    radial-gradient(circle at 42% 68%, rgba(189, 139, 88, 0.07), transparent 300px);
+}
+
+body.is-authenticated #view-login {
+  display: none !important;
+}
+
+body.is-authenticated .sidebar {
+  display: flex;
+}
+
+body.is-authenticated .topbar {
+  display: flex;
+}
+
+body.is-authenticated .ops-strip {
+  display: grid;
+}
+
 .is-logged-out .shell {
   width: 100%;
 }
@@ -376,8 +420,8 @@ p {
 
 @keyframes loginFadeIn {
   from {
-    opacity: 0;
-    transform: translateY(10px);
+    opacity: 0.98;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
