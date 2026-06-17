@@ -16,6 +16,11 @@ export async function listVirtualMachines(_req, res) {
 export async function patchVirtualMachine(req, res) {
   const id = Number(req.params.id);
   const { status, actor_id = null } = req.body;
+  const actorId = req.user.id;
+
+  if (actor_id && actor_id !== actorId) {
+    throw new ApiError(403, "actor_mismatch", "Le actor_id doit correspondre a l'utilisateur connecte.");
+  }
 
   const row = await withTransaction(async (client) => {
     const existing = await client.query("SELECT * FROM virtual_machines WHERE id = $1 FOR UPDATE", [id]);
@@ -35,7 +40,7 @@ export async function patchVirtualMachine(req, res) {
       `INSERT INTO audit_events (actor_id, vm_id, request_id, event_type, severity, event_message)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [
-        actor_id,
+        actorId,
         id,
         existing.rows[0].request_id,
         `vm_${status}`,

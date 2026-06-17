@@ -26,6 +26,8 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
+      AUTH_MODE: mock
+      SESSION_SECRET: dev-only-docker-session-secret-change-me
       DATABASE_URL: postgres://cloud_lab_dev:cloud_lab_dev_password@postgres:5432/cloud_lab
     ports:
       - "3000:3000"

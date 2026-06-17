@@ -15,6 +15,12 @@ export async function listVmRequests(_req, res) {
 
 export async function createVmRequest(req, res) {
   const payload = req.body;
+  const requesterId = payload.requester_id;
+
+  if (req.user.role !== "admin" && req.user.id !== requesterId) {
+    throw new ApiError(403, "requester_mismatch", "Un utilisateur non-admin ne peut creer une demande que pour son propre compte.");
+  }
+
   const row = await withTransaction(async (client) => {
     const { rows } = await client.query(
       `INSERT INTO vm_requests (requester_id, course_id, template_id, quantity, start_date, end_date, status, request_reason)
@@ -44,6 +50,11 @@ export async function createVmRequest(req, res) {
 export async function patchVmRequest(req, res) {
   const id = Number(req.params.id);
   const { status, validator_id = null, decision_comment = null } = req.body;
+  const actorId = req.user.id;
+
+  if (validator_id && validator_id !== actorId) {
+    throw new ApiError(403, "validator_mismatch", "Le validator_id doit correspondre a l'utilisateur connecte.");
+  }
 
   const row = await withTransaction(async (client) => {
     const existing = await client.query("SELECT * FROM vm_requests WHERE id = $1 FOR UPDATE", [id]);
@@ -57,14 +68,14 @@ export async function patchVmRequest(req, res) {
            updated_at = now()
        WHERE id = $4
        RETURNING *`,
-      [status, validator_id, decision_comment, id]
+      [status, actorId, decision_comment, id]
     );
 
     await client.query(
       `INSERT INTO audit_events (actor_id, request_id, event_type, severity, event_message)
        VALUES ($1, $2, $3, $4, $5)`,
       [
-        validator_id,
+        actorId,
         id,
         `request_${status}`,
         ["approved", "provisioned"].includes(status) ? "success" : status === "refused" ? "warning" : "info",
