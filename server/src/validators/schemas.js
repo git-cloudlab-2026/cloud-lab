@@ -43,3 +43,15 @@ export const patchVirtualMachineSchema = z.object({
   status: z.enum(["creating", "running", "stopped", "down", "expired", "destroyed", "error"]),
   actor_id: z.number().int().positive().nullable().optional()
 });
+
+export const provisioningResultSchema = z.object({
+  provider_vm_id: z.string().min(1).max(120),
+  ip_address: z.string().min(3).max(60).nullable().optional(),
+  status: z.enum(["running", "error"]),
+  network_segment: z.string().max(80).nullable().optional()
+});
+
+export const destructionResultSchema = z.object({
+  status: z.literal("destroyed"),
+  destroyed_at: z.string().datetime().optional()
+});

@@ -122,6 +122,117 @@ PATCH /api/v1/notifications/:id/read
 
 Un adaptateur email existe dans `server/src/services/emailAdapter.js`. Pour le pilote, il journalise les emails avec `console.log`. En production, il suffit de remplacer cette implementation par un provider SMTP Infomaniak Mail, SendGrid ou un service interne, sans changer les controleurs.
 
+## Integration future provisioning
+
+Cette API prepare le contrat entre le portail Cloud Lab et le futur service de provisioning Terraform/OpenTofu de Josue.
+
+Important : le backend ne lance aucune commande Terraform, aucun `execFile`, aucun SSH et ne cree aucune VM reelle. Les routes ci-dessous changent uniquement des statuts en base, ecrivent des evenements d'audit et exposent un contrat stable pour l'integration future.
+
+### 1. Demander le provisioning d'une demande approuvee
+
+```http
+POST /api/v1/vm-requests/:id/provision
+```
+
+Role autorise : `validator` ou `admin`.
+
+Comportement :
+
+- verifie que la demande existe ;
+- verifie que `vm_requests.status = 'approved'` ;
+- passe la demande a `status = 'provisioning'` ;
+- cree un `audit_event` de type `provisioning_requested` ;
+- retourne `202 Accepted`.
+
+Reponse :
+
+```json
+{
+  "data": {
+    "id": 12,
+    "status": "provisioning"
+  }
+}
+```
+
+Codes de retour :
+
+- `202` : intention de provisioning enregistree ;
+- `404` : demande introuvable ;
+- `409` : demande pas encore approuvee ;
+- `401/403` : utilisateur non connecte ou role insuffisant.
+
+### 2. Rapporter le resultat du provisioning reel
+
+```http
+PATCH /api/v1/virtual-machines/:id/provisioning-result
+Content-Type: application/json
+```
+
+Role autorise pour l'instant : `admin`. Plus tard, ce sera un compte de service technique.
+
+Payload :
+
+```json
+{
+  "provider_vm_id": "infomaniak-openstack-vm-id",
+  "ip_address": "10.42.0.15",
+  "status": "running",
+  "network_segment": "class-linux-admin"
+}
+```
+
+Valeurs acceptees pour `status` :
+
+- `running` : provisioning reussi, audit `vm_provisioned` ;
+- `error` : provisioning echoue, audit `vm_provisioning_failed`.
+
+Comportement :
+
+- met a jour `provider_vm_id`, `ip_address`, `status`, `network_segment` ;
+- cree un evenement d'audit `vm_provisioned` ou `vm_provisioning_failed`.
+
+Codes de retour :
+
+- `200` : resultat enregistre ;
+- `400` : payload invalide ;
+- `404` : VM introuvable ;
+- `401/403` : utilisateur non connecte ou role insuffisant.
+
+### 3. Rapporter le resultat de destruction
+
+```http
+PATCH /api/v1/virtual-machines/:id/destruction-result
+Content-Type: application/json
+```
+
+Role autorise pour l'instant : `admin`. Plus tard, ce sera un compte de service technique.
+
+Payload :
+
+```json
+{
+  "status": "destroyed",
+  "destroyed_at": "2026-06-18T10:30:00.000Z"
+}
+```
+
+`destroyed_at` est optionnel. S'il est absent, le serveur utilise l'heure courante.
+
+Comportement :
+
+- passe la VM a `status = 'destroyed'` ;
+- renseigne `destroyed_at` ;
+- cree un `audit_event` de type `vm_destroyed` ;
+- cree une notification `vm_destroyed` pour le proprietaire de la VM.
+
+Codes de retour :
+
+- `200` : destruction enregistree ;
+- `400` : payload invalide ;
+- `404` : VM introuvable ;
+- `401/403` : utilisateur non connecte ou role insuffisant.
+
 ## Migrations
 
 ```bash
@@ -179,8 +290,11 @@ Le service PostgreSQL expose le port `5432`, le backend expose le port `3000`.
 - `GET /api/v1/vm-requests`
 - `POST /api/v1/vm-requests`
 - `PATCH /api/v1/vm-requests/:id`
+- `POST /api/v1/vm-requests/:id/provision`
 - `GET /api/v1/virtual-machines`
 - `PATCH /api/v1/virtual-machines/:id`
+- `PATCH /api/v1/virtual-machines/:id/provisioning-result`
+- `PATCH /api/v1/virtual-machines/:id/destruction-result`
 - `GET /api/v1/vm-metrics`
 - `GET /api/v1/cost-records`
 - `GET /api/v1/audit-events`

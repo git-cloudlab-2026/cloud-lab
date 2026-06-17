@@ -117,3 +117,38 @@ export async function patchVmRequest(req, res) {
 
   res.json({ data: row });
 }
+
+export async function requestProvisioning(req, res) {
+  const id = Number(req.params.id);
+  const actorId = req.user.id;
+
+  const row = await withTransaction(async (client) => {
+    const existing = await client.query("SELECT * FROM vm_requests WHERE id = $1 FOR UPDATE", [id]);
+    if (existing.rowCount === 0) throw new ApiError(404, "vm_request_not_found", "Demande VM introuvable.");
+    if (existing.rows[0].status !== "approved") {
+      throw new ApiError(409, "vm_request_not_approved", "Seule une demande approuvee peut passer en provisioning.");
+    }
+
+    // Point d'integration uniquement: aucune VM n'est creee ici.
+    // Le futur service Terraform/OpenTofu de Josue lira cette intention,
+    // creera les ressources, puis appellera /virtual-machines/:id/provisioning-result.
+    const { rows } = await client.query(
+      `UPDATE vm_requests
+       SET status = 'provisioning',
+           updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    await client.query(
+      `INSERT INTO audit_events (actor_id, request_id, event_type, severity, event_message)
+       VALUES ($1, $2, 'provisioning_requested', 'info', $3)`,
+      [actorId, id, `Provisioning demande pour la demande #${id}. Aucun appel Terraform n'est lance par cette API.`]
+    );
+
+    return rows[0];
+  });
+
+  res.status(202).json({ data: row });
+}
