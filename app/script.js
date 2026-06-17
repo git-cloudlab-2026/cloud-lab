@@ -407,10 +407,18 @@ function normaliseState(input) {
     vm.createdAt ||= `${vm.startDate}T08:00:00`;
     vm.provisionedAt ||= vm.createdAt;
     vm.destroyedAt ||= null;
+    vm.network = normaliseNetworkSegment(vm.network);
     if (vm.status === "running") vm.status = "active";
   });
 
   return data;
+}
+
+function normaliseNetworkSegment(network) {
+  if (!network) return "class-course-unknown";
+  if (network.startsWith("class-")) return network;
+  if (network.startsWith("course-")) return `class-${network}`;
+  return `class-${network}`;
 }
 
 function byId(list, id) {
@@ -424,6 +432,19 @@ function nowDate() {
 function toDate(value) {
   if (!value) return null;
   return new Date(value.includes("T") ? value : `${value}T00:00:00`);
+}
+
+function addHours(date, hours) {
+  return new Date(date.getTime() + hours * 3600000);
+}
+
+function formatIsoLocal(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function laterDate(...dates) {
+  return new Date(Math.max(...dates.filter(Boolean).map((date) => date.getTime())));
 }
 
 function hoursBetween(start, end) {
@@ -768,10 +789,14 @@ function renderRequests() {
       const user = ownerForRequest(request);
       const course = courseForRequest(request);
       const template = templateForRequest(request);
-      const actions =
-        request.status === "pending"
-          ? `<button class="action-button approve" data-approve="${request.id}">Approuver</button><button class="action-button refuse" data-refuse="${request.id}">Refuser</button>`
-          : "-";
+      const actions = [];
+      if (request.status === "pending") {
+        actions.push(`<button class="action-button approve" data-approve="${request.id}">Approuver</button>`);
+        actions.push(`<button class="action-button refuse" data-refuse="${request.id}">Refuser</button>`);
+      }
+      if (request.status === "approved") {
+        actions.push(`<button class="action-button approve" data-provision="${request.id}">Provisionner</button>`);
+      }
       return `
         <tr>
           <td>#${request.id}</td>
@@ -782,7 +807,7 @@ function renderRequests() {
           <td>${request.startDate} -> ${request.endDate}</td>
           <td class="num">${formatCost(estimatedRequestCost(request))}</td>
           <td>${statusBadge(request.status)}</td>
-          <td>${actions}</td>
+          <td>${actions.length ? actions.join("") : "-"}</td>
         </tr>
       `;
     })
@@ -962,10 +987,14 @@ function refuseRequest(id) {
   renderAll();
 }
 
-function simulateProvisioning() {
-  const request = state.requests.find((item) => item.status === "approved");
+function provisionRequest(requestId) {
+  const request = requestId ? byId(state.requests, requestId) : state.requests.find((item) => item.status === "approved");
   if (!request) {
     alert("Aucune demande approuvee a provisionner.");
+    return;
+  }
+  if (request.status !== "approved") {
+    alert(`La demande #${request.id} n'est pas en statut approved.`);
     return;
   }
   const owner = ownerForRequest(request);
@@ -974,10 +1003,19 @@ function simulateProvisioning() {
   if (!transitionEntity(request, "provisioning", "provisioningAt")) return;
   const firstVmId = Math.max(...state.vms.map((item) => item.id), 0) + 1;
   const slug = owner.fullName.toLowerCase().split(" ")[0];
-  const network = owner.className ? owner.className.toLowerCase() : `course-${request.courseId}`;
+  const network = owner.className ? `class-${owner.className.toLowerCase()}` : `class-course-${request.courseId}`;
+  const requestedQuantity = Number(request.quantity || 1);
+  const targetQuantity = Math.min(requestedQuantity, 50);
+  if (requestedQuantity > 50) {
+    console.warn(`Demande #${request.id}: ${requestedQuantity} VM demandees, simulation limitee a 50 VM.`);
+  }
+  const now = nowDate();
+  const startFloor = toDate(request.startDate);
+  const demoProvisionedAt = laterDate(startFloor, addHours(now, -4));
+  const demoCreatedAt = laterDate(startFloor, addHours(demoProvisionedAt, -0.1));
   const createdVms = [];
 
-  for (let index = 0; index < request.quantity; index += 1) {
+  for (let index = 0; index < targetQuantity; index += 1) {
     const vmId = firstVmId + index;
     const vm = {
       id: vmId,
@@ -990,22 +1028,30 @@ function simulateProvisioning() {
       sshUser: "student",
       sshKey: `SHA256:lab-${slug}`,
       network,
-      createdAt: CLOCK_NOW,
+      // Decalage volontaire pour eviter un cout reel a 0 CHF sur une VM tout juste provisionnee, plus realiste en demo.
+      createdAt: formatIsoLocal(demoCreatedAt),
       provisionedAt: null,
       startDate: request.startDate,
       endDate: request.endDate,
       destroyedAt: null
     };
     state.vms.push(vm);
-    transitionEntity(vm, "active", "provisionedAt");
+    transitionEntity(vm, "active", null);
+    vm.provisionedAt = formatIsoLocal(demoProvisionedAt);
     createdVms.push(vm);
   }
 
-  transitionEntity(request, "active", "provisionedAt");
+  transitionEntity(request, "active", null);
+  request.provisionedAt = formatIsoLocal(demoProvisionedAt);
   refreshLifecycleStatuses();
-  addEvent(`${createdVms.length} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).`);
+  const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitee a ${targetQuantity}/${requestedQuantity} pour la demo.` : "";
+  addEvent(`${createdVms.length}/${targetQuantity} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`);
   saveState();
   renderAll();
+}
+
+function simulateProvisioning() {
+  provisionRequest();
 }
 
 function destroyExpiredVms() {
@@ -1142,8 +1188,10 @@ document.querySelector("#resetDataButton").addEventListener("click", () => {
 document.querySelector("#requestsTable").addEventListener("click", (event) => {
   const approve = event.target.closest("[data-approve]");
   const refuse = event.target.closest("[data-refuse]");
+  const provision = event.target.closest("[data-provision]");
   if (approve) approveRequest(approve.dataset.approve);
   if (refuse) refuseRequest(refuse.dataset.refuse);
+  if (provision) provisionRequest(provision.dataset.provision);
 });
 
 renderAll();
