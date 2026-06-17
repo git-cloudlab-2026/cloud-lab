@@ -1,0 +1,23 @@
+{
+  "name": "cloud-lab-control-center-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend Express + PostgreSQL pour Cloud Lab Control Center.",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node-pg-migrate up -m src/db/migrations --envPath ../.env",
+    "migrate:down": "node-pg-migrate down -m src/db/migrations --envPath ../.env",
+    "seed": "node src/db/seeds/seed.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "node-pg-migrate": "^7.7.1",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  }
+}
