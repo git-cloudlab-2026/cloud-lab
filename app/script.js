@@ -42,12 +42,24 @@ const PERMISSIONS = {
   approveRequest: ["validator", "admin"],
   refuseRequest: ["validator", "admin"],
   provisionVm: ["validator", "admin"],
-  destroyExpiredVms: ["validator", "admin"],
+  destroyExpiredVms: ["admin"],
   resetData: ["admin"],
-  exportCsv: ["validator", "admin", "trainer"],
+  exportCsv: ["student", "trainer", "validator", "admin"],
   createGroupRequest: ["trainer", "validator", "admin"],
   viewAudit: ["validator", "admin"],
   createForOtherUser: ["validator", "admin"]
+};
+
+// Regles de navigation explicites par role. La vue validation sert aussi de
+// "Mes demandes" pour student/trainer, mais les actions restent bloquees par PERMISSIONS.
+const VIEW_ACCESS = {
+  dashboard: ["student", "trainer", "validator", "admin"],
+  catalog: ["student", "trainer", "validator", "admin"],
+  request: ["student", "trainer", "validator", "admin"],
+  validation: ["student", "trainer", "validator", "admin"],
+  vms: ["student", "trainer", "validator", "admin"],
+  audit: ["validator", "admin"],
+  login: []
 };
 
 const PRICING_MODEL = {
@@ -542,6 +554,21 @@ function isVmVisibleToUser(vm, user = currentUser()) {
   return false;
 }
 
+function isCourseVisibleToUser(course, user = currentUser()) {
+  if (!user) return false;
+  if (isPrivileged(user)) return true;
+  if (user.role === "trainer") return course.className === user.className;
+  if (user.role === "student") {
+    const hasRequest = state.requests.some((request) => request.courseId === course.id && isRequestVisibleToUser(request, user));
+    const hasVm = state.vms.some((vm) => {
+      const request = byId(state.requests, vm.requestId);
+      return request?.courseId === course.id && isVmVisibleToUser(vm, user);
+    });
+    return hasRequest || hasVm;
+  }
+  return false;
+}
+
 function nowDate() {
   return new Date(CLOCK_NOW);
 }
@@ -672,6 +699,7 @@ function dataControls() {
     .filter((request) => ["pending", "approved"].includes(request.status))
     .reduce((sum, request) => sum + estimatedRequestCost(request), 0);
   const totalBudget = query.costByCourse().reduce((sum, item) => sum + item.course.budgetChf, 0);
+  const budgetRatio = totalBudget > 0 ? (totalReal + totalCommitted) / totalBudget : 0;
 
   return [
     {
@@ -708,7 +736,7 @@ function dataControls() {
       label: "Budget consomme",
       value: `${budgetPercent({ budgetChf: totalBudget }, totalReal, totalCommitted)}%`,
       detail: `${formatCost(totalReal)} reels + ${formatCost(totalCommitted)} engages sur ${formatCost(totalBudget)}.`,
-      tone: (totalReal + totalCommitted) / totalBudget > 0.8 ? "danger" : "success"
+      tone: budgetRatio > 0.8 ? "danger" : "success"
     }
   ];
 }
@@ -801,7 +829,7 @@ const query = {
       .filter(Boolean);
   },
   costByCourse() {
-    return state.courses.map((course) => {
+    return state.courses.filter((course) => isCourseVisibleToUser(course)).map((course) => {
       const requests = query.requests({ courseId: course.id });
       const vms = query.vms({ courseId: course.id });
       const estimated = requests
@@ -824,7 +852,7 @@ const query = {
   },
   costByClass() {
     const map = new Map();
-    state.courses.forEach((course) => {
+    query.costByCourse().forEach(({ course }) => {
       map.set(course.className, { className: course.className, estimated: 0, committed: 0, real: 0 });
     });
     query.costByCourse().forEach((item) => {
@@ -855,9 +883,9 @@ const query = {
 };
 
 function isViewAllowed(viewName) {
-  if (!currentUser()) return viewName === "login";
-  if (viewName === "audit") return can("viewAudit");
-  return true;
+  const user = currentUser();
+  if (!user) return viewName === "login";
+  return VIEW_ACCESS[viewName]?.includes(user.role) ?? false;
 }
 
 function setView(viewName) {
@@ -868,7 +896,14 @@ function setView(viewName) {
     return;
   }
   document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
-  document.querySelector(`#view-${viewName}`).classList.add("active");
+  const targetView = document.querySelector(`#view-${viewName}`);
+  if (!targetView) {
+    addEvent("navigation_error", `Vue inconnue: ${viewName}.`);
+    alert("Vue inconnue.");
+    saveState();
+    return;
+  }
+  targetView.classList.add("active");
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === viewName);
   });
@@ -924,7 +959,8 @@ function renderAuthShell() {
     const allowed = isViewAllowed(button.dataset.view);
     button.disabled = !allowed;
     button.classList.toggle("is-disabled", !allowed);
-    button.title = allowed ? "" : "Acces reserve";
+    button.hidden = !allowed;
+    button.title = allowed ? "" : "Acces reserve a certains roles";
   });
 
   document.querySelector('[data-view="validation"]').textContent = isPrivileged(user) ? "Demandes a valider" : "Mes demandes";
@@ -1046,7 +1082,9 @@ function renderSelectors() {
   document.querySelector("#startDate").value ||= "2026-06-17";
   document.querySelector("#endDate").value ||= "2026-06-24";
   const quantityInput = document.querySelector("#quantity");
-  quantityInput.max = can("createGroupRequest", user) ? 20 : 1;
+  const maxQuantity = can("createGroupRequest", user) ? 20 : 1;
+  quantityInput.max = maxQuantity;
+  if (Number(quantityInput.value || 1) > maxQuantity) quantityInput.value = maxQuantity;
   if (!can("createGroupRequest", user)) quantityInput.value = 1;
 }
 
@@ -1124,7 +1162,10 @@ function renderAlerts() {
 }
 
 function renderCourseCosts() {
-  document.querySelector("#courseCosts").innerHTML = query.costByCourse()
+  const rows = query.costByCourse();
+  document.querySelector("#courseCosts").innerHTML = rows.length === 0
+    ? `<p>Aucun budget visible pour ce profil.</p>`
+    : rows
     .map(({ course, requestCount, committed, real, remaining, percent }) => `
       <div class="list-item cost-row">
         <div>
@@ -1249,6 +1290,14 @@ function createRequest(event) {
   const startDate = document.querySelector("#startDate").value;
   const endDate = document.querySelector("#endDate").value;
   const quantity = Number(document.querySelector("#quantity").value);
+  const maxQuantity = can("createGroupRequest", user) ? 20 : 1;
+  if (quantity > maxQuantity) {
+    alert("Action non autorisee pour votre role.");
+    addEvent("permission_denied", `Quantite ${quantity} refusee pour le role ${user.role}.`);
+    saveState();
+    renderAudit();
+    return;
+  }
   if (quantity > 1 && !requirePermission("createGroupRequest")) return;
   if (new Date(endDate) <= new Date(startDate)) {
     alert("La date de fin doit etre apres la date de debut.");
