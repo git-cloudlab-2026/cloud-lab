@@ -1,5 +1,6 @@
 import { query, withTransaction } from "../db/pool.js";
 import { ApiError } from "../middlewares/error-handler.js";
+import { createNotification } from "../services/notificationService.js";
 
 export async function listVmRequests(_req, res) {
   const { rows } = await query(`
@@ -57,7 +58,14 @@ export async function patchVmRequest(req, res) {
   }
 
   const row = await withTransaction(async (client) => {
-    const existing = await client.query("SELECT * FROM vm_requests WHERE id = $1 FOR UPDATE", [id]);
+    const existing = await client.query(
+      `SELECT r.*, u.email AS requester_email
+       FROM vm_requests r
+       JOIN users u ON u.id = r.requester_id
+       WHERE r.id = $1
+       FOR UPDATE OF r`,
+      [id]
+    );
     if (existing.rowCount === 0) throw new ApiError(404, "vm_request_not_found", "Demande VM introuvable.");
 
     const { rows } = await client.query(
@@ -82,6 +90,27 @@ export async function patchVmRequest(req, res) {
         `Demande #${id} mise a jour vers ${status}.`
       ]
     );
+
+    if (["approved", "refused"].includes(status)) {
+      const requester = existing.rows[0];
+      const isApproved = status === "approved";
+      await createNotification(
+        requester.requester_id,
+        isApproved ? "vm_request_approved" : "vm_request_refused",
+        isApproved ? "Votre demande de VM est approuvee" : "Votre demande de VM est refusee",
+        isApproved
+          ? `Votre demande #${id} a ete approuvee. Le provisioning peut demarrer.`
+          : `Votre demande #${id} a ete refusee. Commentaire: ${decision_comment}`,
+        {
+          client,
+          email: requester.requester_email,
+          metadata: {
+            request_id: id,
+            decision_comment
+          }
+        }
+      );
+    }
 
     return rows[0];
   });

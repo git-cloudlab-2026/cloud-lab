@@ -2,6 +2,7 @@ import { Router } from "express";
 import { listCostRecords, listCourses, listVmMetrics, listVmTemplates } from "../controllers/common-controller.js";
 import { listAuditEvents } from "../controllers/audit-events-controller.js";
 import { getDashboardSummary } from "../controllers/dashboard-controller.js";
+import { getNotifications, markRead } from "../controllers/notifications-controller.js";
 import { createUser, listUsers } from "../controllers/users-controller.js";
 import { createVmRequest, listVmRequests, patchVmRequest } from "../controllers/vm-requests-controller.js";
 import { listVirtualMachines, patchVirtualMachine } from "../controllers/virtual-machines-controller.js";
@@ -32,5 +33,8 @@ apiRouter.patch("/virtual-machines/:id", requireRole("validator", "admin"), vali
 apiRouter.get("/vm-metrics", asyncHandler(listVmMetrics));
 apiRouter.get("/cost-records", asyncHandler(listCostRecords));
 apiRouter.get("/audit-events", asyncHandler(listAuditEvents));
+
+apiRouter.get("/notifications", asyncHandler(getNotifications));
+apiRouter.patch("/notifications/:id/read", asyncHandler(markRead));
 
 apiRouter.get("/dashboard/summary", asyncHandler(getDashboardSummary));

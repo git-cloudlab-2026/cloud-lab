@@ -1,5 +1,6 @@
 import { query, withTransaction } from "../db/pool.js";
 import { ApiError } from "../middlewares/error-handler.js";
+import { createNotification } from "../services/notificationService.js";
 
 export async function listVirtualMachines(_req, res) {
   const { rows } = await query(`
@@ -23,7 +24,14 @@ export async function patchVirtualMachine(req, res) {
   }
 
   const row = await withTransaction(async (client) => {
-    const existing = await client.query("SELECT * FROM virtual_machines WHERE id = $1 FOR UPDATE", [id]);
+    const existing = await client.query(
+      `SELECT vm.*, u.email AS owner_email
+       FROM virtual_machines vm
+       JOIN users u ON u.id = vm.owner_id
+       WHERE vm.id = $1
+       FOR UPDATE OF vm`,
+      [id]
+    );
     if (existing.rowCount === 0) throw new ApiError(404, "virtual_machine_not_found", "Machine virtuelle introuvable.");
 
     const destroyedAt = status === "destroyed" ? "now()" : "destroyed_at";
@@ -48,6 +56,24 @@ export async function patchVirtualMachine(req, res) {
         `VM #${id} mise a jour vers ${status}.`
       ]
     );
+
+    if (status === "destroyed") {
+      const vm = existing.rows[0];
+      await createNotification(
+        vm.owner_id,
+        "vm_destroyed",
+        "Votre VM a ete detruite",
+        `La machine ${vm.name} a ete detruite et les ressources cloud ont ete liberees.`,
+        {
+          client,
+          email: vm.owner_email,
+          metadata: {
+            vm_id: id,
+            request_id: vm.request_id
+          }
+        }
+      );
+    }
 
     return rows[0];
   });

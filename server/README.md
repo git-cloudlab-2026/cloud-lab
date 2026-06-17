@@ -93,6 +93,35 @@ Dans Microsoft Entra ID :
 
 Les sessions sont stockees en PostgreSQL via un cookie `httpOnly`. En production, le cookie devient `secure` avec `NODE_ENV=production`.
 
+## Notifications
+
+Le backend contient une table `notifications` pour informer les utilisateurs sans coupler le portail a un provider email.
+
+Champs principaux :
+
+- `user_id` : destinataire de la notification.
+- `type` : categorie fonctionnelle (`vm_request_approved`, `vm_request_refused`, `vm_expiring_soon`, `vm_destroyed`).
+- `title` / `message` : contenu affichable dans le portail.
+- `is_read` : suivi lu/non lu.
+- `metadata` : contexte technique extensible (`request_id`, `vm_id`, `end_date`) pour eviter les doublons et relier la notification au cycle de vie.
+- `created_at` : horodatage serveur.
+
+Flux implemente :
+
+- Lorsqu'une demande VM est approuvee ou refusee via `PATCH /api/v1/vm-requests/:id`, le demandeur recoit automatiquement une notification.
+- Lorsqu'une VM passe au statut `destroyed`, le proprietaire recoit une notification `vm_destroyed`.
+- Un job `node-cron` tourne chaque jour a 08:00 et cree une notification `vm_expiring_soon` pour les VM dont l'echeance est proche, en evitant les doublons pour une meme VM le meme jour.
+
+Endpoints :
+
+```http
+GET /api/v1/notifications
+GET /api/v1/notifications?unread_only=true
+PATCH /api/v1/notifications/:id/read
+```
+
+Un adaptateur email existe dans `server/src/services/emailAdapter.js`. Pour le pilote, il journalise les emails avec `console.log`. En production, il suffit de remplacer cette implementation par un provider SMTP Infomaniak Mail, SendGrid ou un service interne, sans changer les controleurs.
+
 ## Migrations
 
 ```bash
@@ -155,4 +184,6 @@ Le service PostgreSQL expose le port `5432`, le backend expose le port `3000`.
 - `GET /api/v1/vm-metrics`
 - `GET /api/v1/cost-records`
 - `GET /api/v1/audit-events`
+- `GET /api/v1/notifications`
+- `PATCH /api/v1/notifications/:id/read`
 - `GET /api/v1/dashboard/summary`
