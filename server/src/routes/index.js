@@ -5,7 +5,14 @@ import { getDashboardSummary } from "../controllers/dashboard-controller.js";
 import { getNotifications, markRead } from "../controllers/notifications-controller.js";
 import { createUser, listUsers } from "../controllers/users-controller.js";
 import { createVmRequest, listVmRequests, patchVmRequest, requestProvisioning } from "../controllers/vm-requests-controller.js";
-import { listVirtualMachines, patchDestructionResult, patchProvisioningResult, patchVirtualMachine } from "../controllers/virtual-machines-controller.js";
+import {
+  createVirtualMachineMetric,
+  listVirtualMachineMetricHistory,
+  listVirtualMachines,
+  patchDestructionResult,
+  patchProvisioningResult,
+  patchVirtualMachine
+} from "../controllers/virtual-machines-controller.js";
 import { asyncHandler } from "../middlewares/async-handler.js";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
 import { validateBody } from "../middlewares/validate.js";
@@ -13,6 +20,7 @@ import { authRouter } from "./auth-routes.js";
 import {
   createUserSchema,
   createVmRequestSchema,
+  createVmMetricSchema,
   destructionResultSchema,
   patchVirtualMachineSchema,
   patchVmRequestSchema,
@@ -37,6 +45,8 @@ apiRouter.post("/vm-requests/:id/provision", requireRole("validator", "admin"), 
 
 apiRouter.get("/virtual-machines", asyncHandler(listVirtualMachines));
 apiRouter.patch("/virtual-machines/:id", requireRole("validator", "admin"), validateBody(patchVirtualMachineSchema), asyncHandler(patchVirtualMachine));
+apiRouter.post("/virtual-machines/:id/metrics", requireRole("admin"), validateBody(createVmMetricSchema), asyncHandler(createVirtualMachineMetric));
+apiRouter.get("/virtual-machines/:id/metrics/history", asyncHandler(listVirtualMachineMetricHistory));
 apiRouter.patch("/virtual-machines/:id/provisioning-result", requireRole("admin"), validateBody(provisioningResultSchema), asyncHandler(patchProvisioningResult));
 apiRouter.patch("/virtual-machines/:id/destruction-result", requireRole("admin"), validateBody(destructionResultSchema), asyncHandler(patchDestructionResult));
 

@@ -155,6 +155,77 @@ Pour afficher les VM arrivees a echeance et en attente de destruction reelle :
 GET /api/v1/virtual-machines?status=expired
 ```
 
+## Monitoring minimal cote donnees
+
+Le backend expose et stocke les metriques VM dans `vm_metrics`, mais ne collecte rien directement sur les machines.
+
+Frontiere importante :
+
+- ce backend recoit, valide et historise les metriques ;
+- la collecte reelle sur les VM physiques ou cloud sera branchee plus tard par l'equipe infra ;
+- aucun SSH, aucun agent installe et aucun appel reseau vers une VM n'est effectue ici.
+
+### Envoyer une mesure pour une VM
+
+```http
+POST /api/v1/virtual-machines/:id/metrics
+Content-Type: application/json
+```
+
+Role autorise pour l'instant : `admin`. Plus tard, ce sera un compte de service technique utilise par un agent de monitoring.
+
+Payload :
+
+```json
+{
+  "cpu_usage_percent": 42.5,
+  "ram_usage_percent": 68.1,
+  "disk_usage_percent": 51.9,
+  "state": "up"
+}
+```
+
+Valeurs acceptees pour `state` :
+
+- `up`
+- `down`
+- `unknown`
+
+Comportement :
+
+- verifie que la VM existe ;
+- insere une ligne dans `vm_metrics` ;
+- cree un `audit_event` de type `vm_metric_received`.
+
+Codes de retour :
+
+- `201` : metrique enregistree ;
+- `400` : payload invalide ;
+- `404` : VM introuvable ;
+- `401/403` : utilisateur non connecte ou role insuffisant.
+
+### Historique des metriques d'une VM
+
+```http
+GET /api/v1/virtual-machines/:id/metrics/history
+GET /api/v1/virtual-machines/:id/metrics/history?limit=100
+```
+
+Le parametre `limit` est optionnel, borne entre 1 et 500. Par defaut, l'API retourne les 50 derniers points.
+
+### Simulation de metriques pour demo
+
+Pour tester le dashboard sans vraie VM ni agent de monitoring :
+
+```bash
+cd server
+npm run simulate-metrics
+```
+
+Ce script insere des metriques aleatoires plausibles pour les VM en status `running`.
+
+Important : `server/scripts/simulate-metrics.js` est un outil de developpement/demo. Ce n'est pas un composant de production et il ne remplace pas la collecte reelle qui sera branchee plus tard par Josue/Lorenzo.
+
 ## Integration future provisioning
 
 Cette API prepare le contrat entre le portail Cloud Lab et le futur service de provisioning Terraform/OpenTofu de Josue.
@@ -327,6 +398,8 @@ Le service PostgreSQL expose le port `5432`, le backend expose le port `3000`.
 - `GET /api/v1/virtual-machines`
 - `GET /api/v1/virtual-machines?status=expired`
 - `PATCH /api/v1/virtual-machines/:id`
+- `POST /api/v1/virtual-machines/:id/metrics`
+- `GET /api/v1/virtual-machines/:id/metrics/history`
 - `PATCH /api/v1/virtual-machines/:id/provisioning-result`
 - `PATCH /api/v1/virtual-machines/:id/destruction-result`
 - `GET /api/v1/vm-metrics`

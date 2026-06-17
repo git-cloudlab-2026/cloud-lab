@@ -55,3 +55,10 @@ export const destructionResultSchema = z.object({
   status: z.literal("destroyed"),
   destroyed_at: z.string().datetime().optional()
 });
+
+export const createVmMetricSchema = z.object({
+  cpu_usage_percent: z.number().min(0).max(100).nullable().optional(),
+  ram_usage_percent: z.number().min(0).max(100).nullable().optional(),
+  disk_usage_percent: z.number().min(0).max(100).nullable().optional(),
+  state: z.enum(["up", "down", "unknown"]).default("unknown")
+});

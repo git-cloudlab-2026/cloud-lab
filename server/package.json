@@ -9,7 +9,8 @@
     "start": "node src/server.js",
     "migrate": "node-pg-migrate up -m src/db/migrations",
     "migrate:down": "node-pg-migrate down -m src/db/migrations",
-    "seed": "node src/db/seeds/seed.js"
+    "seed": "node src/db/seeds/seed.js",
+    "simulate-metrics": "node scripts/simulate-metrics.js"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",

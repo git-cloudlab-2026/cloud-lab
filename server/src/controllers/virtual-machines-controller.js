@@ -198,3 +198,49 @@ export async function patchDestructionResult(req, res) {
 
   res.json({ data: row });
 }
+
+export async function createVirtualMachineMetric(req, res) {
+  const id = Number(req.params.id);
+  const { cpu_usage_percent = null, ram_usage_percent = null, disk_usage_percent = null, state = "unknown" } = req.body;
+
+  const row = await withTransaction(async (client) => {
+    const existing = await client.query("SELECT id FROM virtual_machines WHERE id = $1", [id]);
+    if (existing.rowCount === 0) throw new ApiError(404, "virtual_machine_not_found", "Machine virtuelle introuvable.");
+
+    const { rows } = await client.query(
+      `INSERT INTO vm_metrics (vm_id, cpu_usage_percent, ram_usage_percent, disk_usage_percent, state)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [id, cpu_usage_percent, ram_usage_percent, disk_usage_percent, state]
+    );
+
+    await client.query(
+      `INSERT INTO audit_events (actor_id, vm_id, event_type, severity, event_message)
+       VALUES ($1, $2, 'vm_metric_received', 'info', $3)`,
+      [req.user.id, id, `Metrie recue pour la VM #${id}.`]
+    );
+
+    return rows[0];
+  });
+
+  res.status(201).json({ data: row });
+}
+
+export async function listVirtualMachineMetricHistory(req, res) {
+  const id = Number(req.params.id);
+  const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 500);
+
+  const existing = await query("SELECT id FROM virtual_machines WHERE id = $1", [id]);
+  if (existing.rowCount === 0) throw new ApiError(404, "virtual_machine_not_found", "Machine virtuelle introuvable.");
+
+  const { rows } = await query(
+    `SELECT *
+     FROM vm_metrics
+     WHERE vm_id = $1
+     ORDER BY collected_at DESC, id DESC
+     LIMIT $2`,
+    [id, limit]
+  );
+
+  res.json({ data: rows });
+}
