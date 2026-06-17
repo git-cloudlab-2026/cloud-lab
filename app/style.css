@@ -207,29 +207,182 @@ p {
   width: 100%;
 }
 
+.is-logged-out {
+  display: block;
+}
+
 .login-view.active {
   min-height: 100vh;
   display: grid;
   place-items: center;
+  max-width: none;
   padding: var(--space-5);
+  animation: loginFadeIn 0.38s var(--ease-product) both;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(91, 140, 123, 0.17), transparent 360px),
+    radial-gradient(circle at 42% 68%, rgba(189, 139, 88, 0.07), transparent 300px);
+}
+
+.login-leaving .login-view.active {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.18s var(--ease-product), transform 0.18s var(--ease-product);
 }
 
 .login-card {
-  width: min(720px, 100%);
+  width: min(540px, 100%);
   display: grid;
-  grid-template-columns: 1fr 0.9fr;
-  gap: var(--space-5);
-  align-items: center;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  padding: 30px;
+  border-color: rgba(232, 228, 216, 0.11);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(126, 170, 153, 0.13), transparent 260px),
+    linear-gradient(180deg, rgba(29, 36, 44, 0.88), rgba(18, 23, 29, 0.94));
+  box-shadow: var(--shadow-float);
+}
+
+.login-brand {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.login-brand .brand-mark {
+  margin-bottom: var(--space-1);
+}
+
+.login-brand strong {
+  color: var(--text-primary);
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 760;
+  letter-spacing: -0.04em;
+}
+
+.login-brand p {
+  max-width: 360px;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .login-actions {
   display: grid;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .login-actions p {
+  margin-top: var(--space-1);
+  text-align: center;
   font-size: 13px;
   color: var(--text-tertiary);
+}
+
+.microsoft-button {
+  width: 100%;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ms-grid {
+  width: 17px;
+  height: 17px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+}
+
+.ms-grid i {
+  border-radius: 2px;
+}
+
+.ms-grid i:nth-child(1) { background: #d97855; }
+.ms-grid i:nth-child(2) { background: #7fa48d; }
+.ms-grid i:nth-child(3) { background: #5b8c7b; }
+.ms-grid i:nth-child(4) { background: #bd8b58; }
+
+.mock-user-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.mock-user-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: rgba(232, 228, 216, 0.032);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s var(--ease-product);
+}
+
+.mock-user-card:hover,
+.mock-user-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  background: rgba(232, 228, 216, 0.05);
+  box-shadow: var(--shadow-card);
+}
+
+.mock-user-card strong,
+.mock-user-card small {
+  display: block;
+}
+
+.mock-user-card strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mock-user-card small {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mock-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #0c100e;
+  font-size: 13px;
+  font-weight: 820;
+  background: var(--accent-strong);
+}
+
+.mock-avatar.role-student { background: var(--accent-strong); }
+.mock-avatar.role-trainer { background: var(--warning); }
+.mock-avatar.role-validator { background: var(--success); }
+.mock-avatar.role-admin { background: var(--danger); }
+
+@keyframes loginFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .section-head {

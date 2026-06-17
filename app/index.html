@@ -68,17 +68,18 @@
 
     <section class="view login-view" id="view-login">
       <div class="login-card panel">
-        <div>
-          <div class="eyebrow">Microsoft 365 ready</div>
-          <h1>Connexion au portail cloud</h1>
-          <p>Choisissez un compte de demonstration. Le flux reproduit la structure d'une connexion O365 sans appel reseau.</p>
+        <div class="login-brand">
+          <span class="brand-mark">GIT</span>
+          <strong>Cloud Lab</strong>
+          <p>Connexion securisee via votre compte institutionnel</p>
         </div>
-        <div class="login-actions">
-          <button class="primary-button" id="mockMicrosoftLoginButton" type="button">Se connecter avec Microsoft 365</button>
-          <label>
-            Compte de demonstration
-            <select id="mockLoginUser"></select>
-          </label>
+        <div class="login-actions" aria-label="Choix du compte de demonstration">
+          <button class="primary-button microsoft-button" id="mockMicrosoftLoginButton" type="button">
+            <span class="ms-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            Se connecter avec Microsoft 365
+          </button>
+          <div class="mock-user-list" id="mockLoginUsers"></div>
+          <select id="mockLoginUser" hidden aria-hidden="true"></select>
           <p>Authentification simulee pour la demo. Integration Entra ID prevue en phase suivante.</p>
         </div>
       </div>

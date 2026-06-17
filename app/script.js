@@ -881,6 +881,16 @@ function roleBadgeClass(role) {
   return `role-${role || "guest"}`;
 }
 
+function initialsFor(name) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase();
+}
+
 function renderAuthShell() {
   const user = currentUser();
   document.body.classList.toggle("is-logged-out", !user);
@@ -929,20 +939,37 @@ function renderPermissionStates() {
 
 function renderLoginUsers() {
   const select = document.querySelector("#mockLoginUser");
+  const list = document.querySelector("#mockLoginUsers");
   select.innerHTML = state.users
     .map((user) => `<option value="${user.id}">${user.fullName} - ${roleLabel(user.role)}</option>`)
+    .join("");
+  list.innerHTML = state.users
+    .map((user) => `
+      <button class="mock-user-card" type="button" data-login-user="${user.id}">
+        <span class="mock-avatar ${roleBadgeClass(user.role)}">${initialsFor(user.fullName)}</span>
+        <span>
+          <strong>${user.fullName}</strong>
+          <small>${user.email}</small>
+        </span>
+        <span class="role-badge ${roleBadgeClass(user.role)}">${roleLabel(user.role)}</span>
+      </button>
+    `)
     .join("");
 }
 
 function loginAsSelectedUser() {
   const user = byId(state.users, document.querySelector("#mockLoginUser").value);
   if (!user) return;
-  user.lastLoginAt = CLOCK_NOW;
-  state.currentUser = buildAuthUser(user);
-  addEvent("login", `${user.fullName} connecte via Microsoft 365 mock.`);
-  saveState();
-  renderAll();
-  setView("dashboard");
+  document.body.classList.add("login-leaving");
+  window.setTimeout(() => {
+    user.lastLoginAt = CLOCK_NOW;
+    state.currentUser = buildAuthUser(user);
+    addEvent("login", `${user.fullName} connecte via Microsoft 365 mock.`);
+    saveState();
+    renderAll();
+    document.body.classList.remove("login-leaving");
+    setView("dashboard");
+  }, 180);
 }
 
 function logout() {
@@ -1475,6 +1502,12 @@ document.querySelector("#resetDataButton").addEventListener("click", () => {
   renderAll();
 });
 document.querySelector("#mockMicrosoftLoginButton").addEventListener("click", loginAsSelectedUser);
+document.querySelector("#mockLoginUsers").addEventListener("click", (event) => {
+  const card = event.target.closest("[data-login-user]");
+  if (!card) return;
+  document.querySelector("#mockLoginUser").value = card.dataset.loginUser;
+  loginAsSelectedUser();
+});
 document.querySelector("#logoutButton").addEventListener("click", logout);
 document.querySelector("#auditTypeFilter").addEventListener("change", renderAudit);
 document.querySelector("#auditActorFilter").addEventListener("change", renderAudit);
