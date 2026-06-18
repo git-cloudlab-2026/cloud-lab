@@ -1,410 +1,210 @@
-# Cloud Lab Control Center - Backend
+# Backend FastAPI - Cloud Lab Control Center
 
-Backend Express + PostgreSQL pour remplacer progressivement la logique en memoire du portail statique.
+Backend FastAPI + PostgreSQL pour une architecture plus propre, testable et proche production.
 
-## Prerequis
+## Architecture
 
-- Node.js 20+
-- PostgreSQL 15+
-- npm
+```text
+server/
+  app/
+    api/v1/routes/      Endpoints HTTP
+    core/               Configuration, securite, erreurs
+    db/                 Session SQLAlchemy
+    domain/             Modeles ORM et enums metier
+    repositories/       Acces PostgreSQL
+    schemas/            Validation Pydantic
+    services/           Regles metier
+    jobs/               Taches data planifiables
+  alembic/              Migrations PostgreSQL
+  scripts/              Seed et outils de demonstration
+```
 
-## Installation
+La logique respecte une separation simple :
 
-```bash
+- `routes` : recoivent les requetes HTTP;
+- `schemas` : valident les payloads;
+- `services` : portent les regles metier;
+- `repositories` : isolent les acces base de donnees;
+- `domain` : decrit les objets persistants.
+
+Les routes ne doivent pas contenir de logique metier lourde. C'est ce qui rend le backend plus conforme a SOLID : chaque couche a une responsabilite claire.
+
+## Installation locale
+
+Version Python recommandee : `3.12`.
+
+```powershell
 cd server
-npm install
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
 ## Configuration
 
-Copier `.env.example` vers `.env` a la racine du depot, puis adapter les valeurs.
+Copier `.env.example` vers `.env` puis adapter les valeurs.
 
-Variable recommandee :
+Variables principales :
 
-```bash
-DATABASE_URL=postgres://cloud_lab_dev:cloud_lab_dev_password@localhost:5432/cloud_lab
-PORT=3000
+```env
+DATABASE_URL=postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@localhost:5432/cloud_lab
 AUTH_MODE=mock
-SESSION_SECRET=change-me-with-a-long-random-value
-```
-
-Les valeurs ci-dessus sont uniquement des valeurs de developpement local. Ne jamais committer de secret reel.
-
-## Authentification
-
-Le backend supporte deux modes avec les memes endpoints, pour que le frontend ne change pas de contrat.
-
-### Mode mock
-
-Mode recommande pour le developpement local et les demos sans tenant Azure :
-
-```bash
-AUTH_MODE=mock
-```
-
-Connexion avec un utilisateur de test existant en base :
-
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "nadia.keller@git.example"
-}
-```
-
-On peut aussi utiliser `user_id` :
-
-```http
-GET /api/v1/auth/login?user_id=1
-```
-
-### Mode OIDC Microsoft Entra ID
-
-Mode cible pour les comptes Office 365 du GIT :
-
-```bash
-AUTH_MODE=oidc
-AZURE_TENANT_ID=<tenant-id>
-AZURE_CLIENT_ID=<application-client-id>
-AZURE_CLIENT_SECRET=<client-secret>
+SESSION_SECRET=change-me
+AZURE_TENANT_ID=
+AZURE_CLIENT_ID=
+AZURE_CLIENT_SECRET=
 AZURE_REDIRECT_URI=http://localhost:3000/api/v1/auth/callback
-AZURE_SCOPES="openid profile email User.Read"
-SESSION_SECRET=<long-secret-aleatoire>
 ```
 
-Flux :
+## Migrations et seed
 
-- `GET /api/v1/auth/login` redirige vers Microsoft Entra ID.
-- `GET /api/v1/auth/callback` echange le code OIDC, retrouve ou cree l'utilisateur via son email institutionnel, puis ouvre une session.
-- `GET /api/v1/auth/me` retourne l'utilisateur connecte.
-- `POST /api/v1/auth/logout` ferme la session.
-
-### App Registration Azure
-
-Dans Microsoft Entra ID :
-
-1. Creer une App Registration.
-2. Ajouter une plateforme Web.
-3. Ajouter la Redirect URI : `http://localhost:3000/api/v1/auth/callback` en dev, puis l'URL HTTPS de production.
-4. Creer un client secret et le placer uniquement dans `.env`.
-5. Donner les scopes OpenID Connect : `openid`, `profile`, `email`.
-6. Ajouter `User.Read` si le projet doit lire le profil Microsoft Graph.
-
-Les sessions sont stockees en PostgreSQL via un cookie `httpOnly`. En production, le cookie devient `secure` avec `NODE_ENV=production`.
-
-## Notifications
-
-Le backend contient une table `notifications` pour informer les utilisateurs sans coupler le portail a un provider email.
-
-Champs principaux :
-
-- `user_id` : destinataire de la notification.
-- `type` : categorie fonctionnelle (`vm_request_approved`, `vm_request_refused`, `vm_expiring_soon`, `vm_expired`, `vm_destroyed`).
-- `title` / `message` : contenu affichable dans le portail.
-- `is_read` : suivi lu/non lu.
-- `metadata` : contexte technique extensible (`request_id`, `vm_id`, `end_date`) pour eviter les doublons et relier la notification au cycle de vie.
-- `created_at` : horodatage serveur.
-
-Flux implemente :
-
-- Lorsqu'une demande VM est approuvee ou refusee via `PATCH /api/v1/vm-requests/:id`, le demandeur recoit automatiquement une notification.
-- Lorsqu'une VM passe au statut `destroyed`, le proprietaire recoit une notification `vm_destroyed`.
-- Un job `node-cron` tourne chaque jour a 08:00. Il marque d'abord les VM arrivees a echeance en `expired`, puis cree une notification `vm_expiring_soon` pour les VM dont l'echeance est proche, en evitant les doublons pour une meme VM le meme jour.
-
-Endpoints :
-
-```http
-GET /api/v1/notifications
-GET /api/v1/notifications?unread_only=true
-PATCH /api/v1/notifications/:id/read
-```
-
-Un adaptateur email existe dans `server/src/services/emailAdapter.js`. Pour le pilote, il journalise les emails avec `console.log`. En production, il suffit de remplacer cette implementation par un provider SMTP Infomaniak Mail, SendGrid ou un service interne, sans changer les controleurs.
-
-## Cycle de vie des VM (partie data)
-
-Le backend gere la detection data de fin de vie, mais ne declenche aucune action d'infrastructure.
-
-Chaque jour a 08:00, un job planifie selectionne les `virtual_machines` dont :
-
-- `end_date <= CURRENT_DATE` ;
-- `status` n'est pas deja `expired` ;
-- `status` n'est pas deja `destroyed`.
-
-Pour chaque VM concernee, le backend :
-
-- met `virtual_machines.status = 'expired'` ;
-- cree un `audit_event` de type `vm_expired` ;
-- cree une notification `vm_expired` pour le proprietaire de la VM.
-
-Frontiere importante :
-
-- `expired` signifie : la VM est arrivee a echeance cote donnees et doit etre traitee.
-- `destroyed` signifie : la destruction reelle a ete confirmee cote cloud.
-
-Le backend ne marque jamais une VM `destroyed` tout seul. Seul le futur code d'infrastructure de Josue, apres suppression reelle dans Infomaniak/OpenStack, appellera :
-
-```http
-PATCH /api/v1/virtual-machines/:id/destruction-result
-```
-
-Pour afficher les VM arrivees a echeance et en attente de destruction reelle :
-
-```http
-GET /api/v1/virtual-machines?status=expired
-```
-
-## Monitoring minimal cote donnees
-
-Le backend expose et stocke les metriques VM dans `vm_metrics`, mais ne collecte rien directement sur les machines.
-
-Frontiere importante :
-
-- ce backend recoit, valide et historise les metriques ;
-- la collecte reelle sur les VM physiques ou cloud sera branchee plus tard par l'equipe infra ;
-- aucun SSH, aucun agent installe et aucun appel reseau vers une VM n'est effectue ici.
-
-### Envoyer une mesure pour une VM
-
-```http
-POST /api/v1/virtual-machines/:id/metrics
-Content-Type: application/json
-```
-
-Role autorise pour l'instant : `admin`. Plus tard, ce sera un compte de service technique utilise par un agent de monitoring.
-
-Payload :
-
-```json
-{
-  "cpu_usage_percent": 42.5,
-  "ram_usage_percent": 68.1,
-  "disk_usage_percent": 51.9,
-  "state": "up"
-}
-```
-
-Valeurs acceptees pour `state` :
-
-- `up`
-- `down`
-- `unknown`
-
-Comportement :
-
-- verifie que la VM existe ;
-- insere une ligne dans `vm_metrics` ;
-- cree un `audit_event` de type `vm_metric_received`.
-
-Codes de retour :
-
-- `201` : metrique enregistree ;
-- `400` : payload invalide ;
-- `404` : VM introuvable ;
-- `401/403` : utilisateur non connecte ou role insuffisant.
-
-### Historique des metriques d'une VM
-
-```http
-GET /api/v1/virtual-machines/:id/metrics/history
-GET /api/v1/virtual-machines/:id/metrics/history?limit=100
-```
-
-Le parametre `limit` est optionnel, borne entre 1 et 500. Par defaut, l'API retourne les 50 derniers points.
-
-### Simulation de metriques pour demo
-
-Pour tester le dashboard sans vraie VM ni agent de monitoring :
-
-```bash
+```powershell
 cd server
-npm run simulate-metrics
+alembic upgrade head
+python -m scripts.seed
 ```
 
-Ce script insere des metriques aleatoires plausibles pour les VM en status `running`.
+## Lancer l'API
 
-Important : `server/scripts/simulate-metrics.js` est un outil de developpement/demo. Ce n'est pas un composant de production et il ne remplace pas la collecte reelle qui sera branchee plus tard par Josue/Lorenzo.
+Le plus fiable en developpement est Docker, car l'image utilise Python 3.12 :
 
-## Integration future provisioning
-
-Cette API prepare le contrat entre le portail Cloud Lab et le futur service de provisioning Terraform/OpenTofu de Josue.
-
-Important : le backend ne lance aucune commande Terraform, aucun `execFile`, aucun SSH et ne cree aucune VM reelle. Les routes ci-dessous changent uniquement des statuts en base, ecrivent des evenements d'audit et exposent un contrat stable pour l'integration future.
-
-### 1. Demander le provisioning d'une demande approuvee
-
-```http
-POST /api/v1/vm-requests/:id/provision
-```
-
-Role autorise : `validator` ou `admin`.
-
-Comportement :
-
-- verifie que la demande existe ;
-- verifie que `vm_requests.status = 'approved'` ;
-- passe la demande a `status = 'provisioning'` ;
-- cree un `audit_event` de type `provisioning_requested` ;
-- retourne `202 Accepted`.
-
-Reponse :
-
-```json
-{
-  "data": {
-    "id": 12,
-    "status": "provisioning"
-  }
-}
-```
-
-Codes de retour :
-
-- `202` : intention de provisioning enregistree ;
-- `404` : demande introuvable ;
-- `409` : demande pas encore approuvee ;
-- `401/403` : utilisateur non connecte ou role insuffisant.
-
-### 2. Rapporter le resultat du provisioning reel
-
-```http
-PATCH /api/v1/virtual-machines/:id/provisioning-result
-Content-Type: application/json
-```
-
-Role autorise pour l'instant : `admin`. Plus tard, ce sera un compte de service technique.
-
-Payload :
-
-```json
-{
-  "provider_vm_id": "infomaniak-openstack-vm-id",
-  "ip_address": "10.42.0.15",
-  "status": "running",
-  "network_segment": "class-linux-admin"
-}
-```
-
-Valeurs acceptees pour `status` :
-
-- `running` : provisioning reussi, audit `vm_provisioned` ;
-- `error` : provisioning echoue, audit `vm_provisioning_failed`.
-
-Comportement :
-
-- met a jour `provider_vm_id`, `ip_address`, `status`, `network_segment` ;
-- cree un evenement d'audit `vm_provisioned` ou `vm_provisioning_failed`.
-
-Codes de retour :
-
-- `200` : resultat enregistre ;
-- `400` : payload invalide ;
-- `404` : VM introuvable ;
-- `401/403` : utilisateur non connecte ou role insuffisant.
-
-### 3. Rapporter le resultat de destruction
-
-```http
-PATCH /api/v1/virtual-machines/:id/destruction-result
-Content-Type: application/json
-```
-
-Role autorise pour l'instant : `admin`. Plus tard, ce sera un compte de service technique.
-
-Payload :
-
-```json
-{
-  "status": "destroyed",
-  "destroyed_at": "2026-06-18T10:30:00.000Z"
-}
-```
-
-`destroyed_at` est optionnel. S'il est absent, le serveur utilise l'heure courante.
-
-Comportement :
-
-- passe la VM a `status = 'destroyed'` ;
-- renseigne `destroyed_at` ;
-- cree un `audit_event` de type `vm_destroyed` ;
-- cree une notification `vm_destroyed` pour le proprietaire de la VM.
-
-Codes de retour :
-
-- `200` : destruction enregistree ;
-- `400` : payload invalide ;
-- `404` : VM introuvable ;
-- `401/403` : utilisateur non connecte ou role insuffisant.
-
-## Migrations
-
-```bash
-cd server
-npm run migrate
-```
-
-## Seed
-
-```bash
-cd server
-npm run seed
-```
-
-## Demarrage
-
-```bash
-cd server
-npm run dev
-```
-
-API disponible sur :
-
-```text
-http://localhost:3000/api/v1
-```
-
-Healthcheck :
-
-```text
-GET /health
-```
-
-## Docker Compose local
-
-Depuis la racine du depot :
-
-```bash
+```powershell
 docker compose up --build
 ```
 
-Le service PostgreSQL expose le port `5432`, le backend expose le port `3000`.
+En local sans Docker :
 
-## Endpoints principaux
+```powershell
+cd server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 3000
+```
 
-- `GET /api/v1/auth/login`
-- `POST /api/v1/auth/login` (mode mock)
-- `GET /api/v1/auth/callback`
-- `GET /api/v1/auth/me`
-- `POST /api/v1/auth/logout`
+Swagger :
+
+```text
+http://localhost:3000/docs
+```
+
+## Authentification
+
+Mode actuel : `AUTH_MODE=mock`.
+
+Connexion de developpement :
+
+```http
+POST /api/v1/auth/mock-login/1
+```
+
+Session courante :
+
+```http
+GET /api/v1/auth/me
+```
+
+OIDC Entra ID reel :
+
+- configuration prevue dans `.env.example`;
+- routes reservees : `/api/v1/auth/login` et `/api/v1/auth/callback`;
+- integration finale a brancher quand le tenant Azure/Entra du GIT est disponible.
+
+## Routes principales
+
 - `GET /api/v1/users`
 - `POST /api/v1/users`
 - `GET /api/v1/courses`
 - `GET /api/v1/vm-templates`
 - `GET /api/v1/vm-requests`
 - `POST /api/v1/vm-requests`
-- `PATCH /api/v1/vm-requests/:id`
-- `POST /api/v1/vm-requests/:id/provision`
+- `PATCH /api/v1/vm-requests/{id}`
+- `POST /api/v1/vm-requests/{id}/provision`
 - `GET /api/v1/virtual-machines`
-- `GET /api/v1/virtual-machines?status=expired`
-- `PATCH /api/v1/virtual-machines/:id`
-- `POST /api/v1/virtual-machines/:id/metrics`
-- `GET /api/v1/virtual-machines/:id/metrics/history`
-- `PATCH /api/v1/virtual-machines/:id/provisioning-result`
-- `PATCH /api/v1/virtual-machines/:id/destruction-result`
-- `GET /api/v1/vm-metrics`
-- `GET /api/v1/cost-records`
+- `PATCH /api/v1/virtual-machines/{id}`
+- `PATCH /api/v1/virtual-machines/{id}/provisioning-result`
+- `PATCH /api/v1/virtual-machines/{id}/destruction-result`
+- `POST /api/v1/virtual-machines/{id}/metrics`
+- `GET /api/v1/virtual-machines/{id}/metrics/history`
+- `GET /api/v1/dashboard/summary`
 - `GET /api/v1/audit-events`
 - `GET /api/v1/notifications`
-- `PATCH /api/v1/notifications/:id/read`
-- `GET /api/v1/dashboard/summary`
+
+## Integration future provisioning
+
+Le backend ne cree aucune VM lui-meme.
+
+Il prepare seulement le contrat que la partie Terraform/OpenTofu de Josue utilisera :
+
+### Demander le provisioning
+
+```http
+POST /api/v1/vm-requests/{id}/provision
+```
+
+Condition : la demande doit etre `approved`.
+
+Effet : la demande passe en `provisioning`, un audit `provisioning_requested` est cree, puis l'API retourne `202 Accepted`.
+
+### Rapporter le resultat du provisioning
+
+```http
+PATCH /api/v1/virtual-machines/{id}/provisioning-result
+Content-Type: application/json
+
+{
+  "provider_vm_id": "ik-vm-123",
+  "ip_address": "10.42.0.15",
+  "status": "running",
+  "network_segment": "IT-2026-A"
+}
+```
+
+Effet : la VM est mise a jour, puis un audit `vm_provisioned` ou `vm_provisioning_failed` est cree selon le statut.
+
+### Rapporter la destruction reelle
+
+```http
+PATCH /api/v1/virtual-machines/{id}/destruction-result
+Content-Type: application/json
+
+{
+  "status": "destroyed",
+  "destroyed_at": "2026-06-26T18:00:00Z"
+}
+```
+
+Effet : la VM passe en `destroyed`, la date de destruction est stockee, un audit `vm_destroyed` et une notification sont crees.
+
+## Cycle de vie des VM - partie data
+
+Le backend peut marquer une VM comme `expired` quand sa `end_date` est depassee.
+
+Commande manuelle de developpement :
+
+```powershell
+cd server
+python -m scripts.mark_expired_vms
+```
+
+Frontiere importante :
+
+- `expired` = la VM doit etre detruite;
+- `destroyed` = la ressource cloud a vraiment ete supprimee par l'infra.
+
+Le passage a `destroyed` doit venir du futur code Terraform/OpenTofu via la route `destruction-result`.
+
+## Monitoring minimal
+
+Le backend expose :
+
+```http
+POST /api/v1/virtual-machines/{id}/metrics
+GET /api/v1/virtual-machines/{id}/metrics/history
+```
+
+Un script de demonstration permet d'alimenter la table `vm_metrics` sans vraie VM :
+
+```powershell
+cd server
+python -m scripts.simulate_metrics
+```
+
+Ce script sert uniquement au developpement et a la demo. La collecte reelle sera branchee plus tard par l'equipe infra.

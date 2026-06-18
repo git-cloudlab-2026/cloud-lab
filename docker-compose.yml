@@ -24,16 +24,17 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: development
-      PORT: 3000
+      ENVIRONMENT: development
       AUTH_MODE: mock
       SESSION_SECRET: dev-only-docker-session-secret-change-me
-      DATABASE_URL: postgres://cloud_lab_dev:cloud_lab_dev_password@postgres:5432/cloud_lab
+      DATABASE_URL: postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@postgres:5432/cloud_lab
     ports:
       - "3000:3000"
     volumes:
-      - ./server/src:/app/src
-    command: sh -c "npm run migrate && npm run seed && npm run dev"
+      - ./server/app:/app/app
+      - ./server/alembic:/app/alembic
+      - ./server/scripts:/app/scripts
+    command: sh -c "alembic upgrade head && python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload"
 
 volumes:
   cloud_lab_pgdata:

@@ -2,121 +2,110 @@
 
 Projet hackathon juin 2026 - Geneva Institute of Technology x Satom IT.
 
-## Objectif du projet
+## Objectif
 
-Créer une plateforme de gestion du cycle de vie des VM de cours :
+Construire une plateforme de gestion du cycle de vie des VM de cours :
 
 ```text
-Demande -> Validation -> Provisioning -> Configuration -> Monitoring -> Destruction
+Demande -> Validation -> Provisioning -> Configuration -> Monitoring -> Fin de vie
 ```
 
-Le but est de permettre à un étudiant ou un formateur de demander une VM de cours, de faire valider cette demande, puis de suivre la machine, son statut, son coût et sa date de fin.
+Le portail permet a un etudiant ou un formateur de demander une VM, de faire valider la demande, puis de suivre la machine, son statut, son cout et sa date de fin.
 
-## Contenu actuel du dépôt
+## Etat actuel du depot
 
-Ce premier push contient uniquement la partie réalisée par Auguy :
+Ce depot contient la partie deja avancee par Auguy :
 
-- portail MVP en HTML/CSS/JavaScript ;
-- catalogue de templates VM ;
-- formulaire de demande ;
-- validation/refus ;
-- simulation du provisioning ;
-- suivi des VM ;
-- dashboard ;
-- calcul des coûts estimés et réels ;
-- alertes d'expiration ;
-- exports CSV ;
-- schéma data et requêtes SQL.
+- portail front-end statique dans `app/`;
+- couche data documentee dans `data/`;
+- backend FastAPI + PostgreSQL dans `server/`;
+- schema SQL, seed data, migrations Alembic;
+- API REST versionnee `/api/v1`;
+- workflow demande, validation, provisioning intent, fin de vie;
+- dashboard, couts, alertes, notifications, audit;
+- points d'integration prepares pour Terraform/OpenTofu et monitoring.
 
-Les parties Terraform/OpenTofu, réseau/sécurité et Ansible seront ajoutées ensuite par les autres membres du groupe.
+Les parties Terraform/OpenTofu, reseau/securite et Ansible restent separees pour eviter de melanger les responsabilites.
 
-## Répartition actuelle
+## Repartition actuelle
 
-| Personne | Partie |
+| Personne | Perimetre |
 |---|---|
-| Auguy | Portail MVP, workflow, data, dashboard, coûts, exports |
-| Josué | Terraform/OpenTofu, création et destruction des VM |
-| Lorenzo | Réseau, sécurité, SSH, isolation OpenStack |
+| Auguy | Portail, data, backend API, dashboard, couts, audit, notifications |
+| Josue | Terraform/OpenTofu, creation et destruction reelle des VM |
+| Lorenzo | Reseau, securite, SSH, isolation OpenStack |
 
-Rayan n'est plus dans le périmètre du projet.
+Rayan n'est plus dans le perimetre actif du projet.
 
-## Structure actuelle
+## Structure
 
 ```text
-app/        portail MVP local
-data/       schéma SQL, seed data, requêtes dashboard
-README.md   présentation du projet
-.gitignore  fichiers à exclure du dépôt
-.env.example exemple de variables d'environnement
+app/                 Front-end statique HTML/CSS/JS
+data/                Schema SQL de reference, seed et requetes dashboard
+server/              Backend FastAPI + PostgreSQL
+docker-compose.yml   PostgreSQL + API pour le dev local
+.env.example         Variables d'environnement sans secret
+.gitignore           Fichiers exclus du depot
 ```
 
-## Ouvrir la démo locale
+## Lancer le front-end
 
-Le portail fonctionne sans serveur.
-
-Ouvrir ce fichier dans un navigateur :
+Le portail statique peut etre ouvert directement :
 
 ```text
 app/index.html
 ```
 
-## Ce que montre la démo
+## Lancer le backend FastAPI
 
-1. Vue dashboard avec KPI principaux.
-2. Catalogue des templates de cours.
-3. Création d'une demande VM.
-4. Validation ou refus d'une demande.
-5. Simulation de provisioning.
-6. Parc VM avec statut, réseau, date de fin et coût réel.
-7. Budget par cours.
-8. Alertes VM expirées ou proches de l'expiration.
-9. Exports CSV des demandes et des VM.
+Avec Docker :
 
-## Modèle de coût
-
-Les coûts ne sont pas mis au hasard.
-
-Le MVP utilise une référence publique Infomaniak Public Cloud :
-
-```text
-4 CPU / 8 GB RAM / 50 GB stockage = 16.10 CHF/mois
+```powershell
+docker compose up --build
 ```
 
-Le prix est ensuite proratisé selon CPU, RAM, disque et durée d'utilisation.
+En local :
 
-Le portail distingue :
+> Utiliser Python 3.12. Python 3.14 peut poser probleme avec certaines dependances PostgreSQL.
 
-- coût estimé : calculé au moment de la demande ;
-- coût réel : calculé selon la durée réelle d'utilisation de la VM.
+```powershell
+cd server
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+alembic upgrade head
+python -m scripts.seed
+uvicorn app.main:app --reload --host 0.0.0.0 --port 3000
+```
 
-## Prochaines intégrations
+Documentation API :
 
-### Josué - Terraform/OpenTofu
+```text
+http://localhost:3000/docs
+```
 
-À ajouter ensuite :
+## Mode auth
 
-- lecture des demandes `approved` ;
-- création VM Infomaniak OpenStack ;
-- retour de l'ID fournisseur, IP, statut ;
-- destruction des VM expirées.
+Le backend supporte un mode de developpement `AUTH_MODE=mock`.
 
-### Lorenzo - Réseau/Sécurité
+L'integration OIDC Microsoft Entra ID reelle est preparee au niveau configuration, mais elle depend des acces tenant fournis par le GIT.
 
-À ajouter ensuite :
+## Frontiere infrastructure
 
-- segments réseau par cours ou classe ;
-- règles firewall ;
-- accès SSH par clés ;
-- isolation des environnements sensibles.
+Le backend ne lance aucune commande Terraform, OpenTofu, SSH ou Ansible.
 
-## Sécurité
+Il expose des endpoints propres pour que la partie infra puisse s'integrer ensuite :
+
+- `POST /api/v1/vm-requests/{id}/provision`
+- `PATCH /api/v1/virtual-machines/{id}/provisioning-result`
+- `PATCH /api/v1/virtual-machines/{id}/destruction-result`
+
+## Securite
 
 Ne jamais commit :
 
-- fichiers `.env` réels ;
-- tokens ;
-- mots de passe OpenStack ;
-- fichiers `clouds.yaml` avec secrets ;
-- clés SSH privées ;
+- `.env` reel;
+- token, mot de passe ou secret OpenStack;
+- fichier `clouds.yaml` contenant des secrets;
+- cle SSH privee;
 - fichiers Terraform `*.tfstate` ou `*.tfvars`.
-
