@@ -23,6 +23,8 @@ Ce depot contient la partie deja avancee par Auguy :
 - API REST versionnee `/api/v1`;
 - workflow demande, validation, provisioning intent, fin de vie;
 - dashboard, couts, alertes, notifications, audit;
+- auth OIDC/Entra ID avec mapping groupes vers roles;
+- 5 classes E1 a E5 avec 25 eleves par classe dans le seed backend;
 - points d'integration prepares pour Terraform/OpenTofu et monitoring.
 
 Les parties Terraform/OpenTofu, reseau/securite et Ansible restent separees pour eviter de melanger les responsabilites.
@@ -75,20 +77,37 @@ python -m venv .venv
 pip install -r requirements.txt
 alembic upgrade head
 python -m scripts.seed
-uvicorn app.main:app --reload --host 0.0.0.0 --port 3000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Documentation API :
 
 ```text
-http://localhost:3000/docs
+http://localhost:8000/docs
 ```
+
+Portail web branche sur FastAPI :
+
+```text
+http://localhost:8000/portal/
+```
+
+Pour tester l'application avec sessions et cookies, utiliser cette URL plutot que
+`app/index.html` en `file://`.
 
 ## Mode auth
 
 Le backend supporte un mode de developpement `AUTH_MODE=mock`.
 
-L'integration OIDC Microsoft Entra ID reelle est preparee au niveau configuration, mais elle depend des acces tenant fournis par le GIT.
+L'integration OIDC Microsoft Entra ID reelle est preparee au niveau configuration.
+
+Mapping prevu :
+
+```text
+Admin / Validateurs / Enseignants / E1 / E2 / E3 / E4 / E5
+```
+
+Les etudiants peuvent etre crees automatiquement au premier login si leur groupe Entra indique leur classe. Les roles sensibles restent controles par la base applicative.
 
 ## Frontiere infrastructure
 

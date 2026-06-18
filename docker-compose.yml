@@ -25,16 +25,31 @@ services:
         condition: service_healthy
     environment:
       ENVIRONMENT: development
-      AUTH_MODE: mock
-      SESSION_SECRET: dev-only-docker-session-secret-change-me
+      AUTH_MODE: ${AUTH_MODE:-mock}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-docker-session-secret-change-me}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      AZURE_REDIRECT_URI: ${AZURE_REDIRECT_URI:-http://localhost:8000/api/v1/auth/callback}
+      AZURE_SCOPES: ${AZURE_SCOPES:-openid profile email User.Read GroupMember.Read.All}
+      ENTRA_ADMIN_GROUP_ID: ${ENTRA_ADMIN_GROUP_ID:-}
+      ENTRA_VALIDATOR_GROUP_ID: ${ENTRA_VALIDATOR_GROUP_ID:-}
+      ENTRA_TEACHER_GROUP_ID: ${ENTRA_TEACHER_GROUP_ID:-}
+      ENTRA_STUDENT_E1_GROUP_ID: ${ENTRA_STUDENT_E1_GROUP_ID:-}
+      ENTRA_STUDENT_E2_GROUP_ID: ${ENTRA_STUDENT_E2_GROUP_ID:-}
+      ENTRA_STUDENT_E3_GROUP_ID: ${ENTRA_STUDENT_E3_GROUP_ID:-}
+      ENTRA_STUDENT_E4_GROUP_ID: ${ENTRA_STUDENT_E4_GROUP_ID:-}
+      ENTRA_STUDENT_E5_GROUP_ID: ${ENTRA_STUDENT_E5_GROUP_ID:-}
+      OIDC_AUTO_CREATE_STUDENTS: ${OIDC_AUTO_CREATE_STUDENTS:-true}
       DATABASE_URL: postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@postgres:5432/cloud_lab
     ports:
-      - "3000:3000"
+      - "8000:8000"
     volumes:
       - ./server/app:/app/app
       - ./server/alembic:/app/alembic
       - ./server/scripts:/app/scripts
-    command: sh -c "alembic upgrade head && python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload"
+      - ./app:/app/frontend:ro
+    command: sh -c "alembic upgrade head && python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   cloud_lab_pgdata:

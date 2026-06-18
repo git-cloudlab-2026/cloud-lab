@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.errors import ApiError
+
 
 class Settings(BaseSettings):
     app_name: str = "Cloud Lab Control Center API"
@@ -13,12 +15,72 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@localhost:5432/cloud_lab"
     )
     session_secret: str = "dev-only-change-me"
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "null"]
+    cors_origins: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:5173", "null"]
 
     azure_tenant_id: str | None = None
     azure_client_id: str | None = None
     azure_client_secret: str | None = None
     azure_redirect_uri: str | None = None
+    azure_scopes: str = "openid profile email User.Read GroupMember.Read.All"
+
+    entra_admin_group_id: str | None = None
+    entra_validator_group_id: str | None = None
+    entra_teacher_group_id: str | None = None
+    entra_student_e1_group_id: str | None = None
+    entra_student_e2_group_id: str | None = None
+    entra_student_e3_group_id: str | None = None
+    entra_student_e4_group_id: str | None = None
+    entra_student_e5_group_id: str | None = None
+    oidc_auto_create_students: bool = True
+
+    def validate_runtime(self) -> None:
+        if self.environment == "production" and self.auth_mode != "oidc":
+            raise RuntimeError("AUTH_MODE=oidc est obligatoire en production.")
+        if self.environment == "production" and self.session_secret == "dev-only-change-me":
+            raise RuntimeError("SESSION_SECRET doit etre change en production.")
+
+    @property
+    def oidc_authority(self) -> str:
+        if not self.azure_tenant_id:
+            raise ApiError(500, "oidc_missing_tenant", "AZURE_TENANT_ID est obligatoire en mode OIDC.")
+        return f"https://login.microsoftonline.com/{self.azure_tenant_id}/v2.0"
+
+    def validate_oidc_settings(self) -> None:
+        missing = [
+            name
+            for name, value in {
+                "AZURE_TENANT_ID": self.azure_tenant_id,
+                "AZURE_CLIENT_ID": self.azure_client_id,
+                "AZURE_CLIENT_SECRET": self.azure_client_secret,
+                "AZURE_REDIRECT_URI": self.azure_redirect_uri,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise ApiError(
+                500,
+                "oidc_missing_configuration",
+                f"Configuration OIDC incomplete: {', '.join(missing)}.",
+            )
+
+    def entra_group_mapping(self) -> dict[str, tuple[str, str | None]]:
+        mapping: dict[str, tuple[str, str | None]] = {}
+        if self.entra_admin_group_id:
+            mapping[self.entra_admin_group_id] = ("admin", None)
+        if self.entra_validator_group_id:
+            mapping[self.entra_validator_group_id] = ("validator", None)
+        if self.entra_teacher_group_id:
+            mapping[self.entra_teacher_group_id] = ("teacher", None)
+        for class_name, group_id in {
+            "E1": self.entra_student_e1_group_id,
+            "E2": self.entra_student_e2_group_id,
+            "E3": self.entra_student_e3_group_id,
+            "E4": self.entra_student_e4_group_id,
+            "E5": self.entra_student_e5_group_id,
+        }.items():
+            if group_id:
+                mapping[group_id] = ("student", class_name)
+        return mapping
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

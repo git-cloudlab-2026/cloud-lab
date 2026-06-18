@@ -20,16 +20,26 @@
   - les prix ne sont pas poses au hasard: ils partent d'une reference publique Infomaniak
     4 CPU / 8 GB RAM / 50 GB stockage = 16.10 CHF/mois, hors TVA, puis sont proratises
     selon CPU/RAM/disque et convertis en cout horaire;
-  - Authentification mockee pour le pilote local. L'integration OIDC reelle contre
-    Entra ID necessitera un backend (client secret jamais expose cote front) - prevue
-    en phase suivante. Cette couche reproduit deja la structure d'un utilisateur
-    authentifie (id, role, claims) pour limiter le travail de migration.
+  - Authentification OIDC reelle cote backend FastAPI. Le front redirige vers
+    /api/v1/auth/login en mode production. Le mode mock reste disponible uniquement
+    pour developper sans tenant Microsoft.
   - les fonctions query.* evitent de dupliquer la logique dans chaque vue.
 */
 
 const STORAGE_KEY = "git-cloud-lab-control-center-v4";
 const CLOCK_NOW = "2026-06-17T10:00:00";
 const EXPIRING_THRESHOLD_HOURS = 24;
+const DATA_MODE = "api"; // "api" = FastAPI/PostgreSQL, "local" = fallback statique.
+const AUTH_MODE_FRONT = "oidc"; // Le backend peut rester en AUTH_MODE=mock pendant le developpement.
+const API_ORIGIN = window.location.protocol.startsWith("http") && window.location.port === "8000"
+  ? window.location.origin
+  : "http://localhost:8000";
+const API_BASE_URL = `${API_ORIGIN}/api/v1`;
+const API_DEV_LOGIN_USER_ID = 1;
+
+if (DATA_MODE === "api" && window.location.protocol === "file:") {
+  window.location.replace(`${API_ORIGIN}/portal/`);
+}
 
 const ROLE_LABELS = {
   student: "Étudiant",
@@ -92,12 +102,12 @@ const VALID_TRANSITIONS = {
 
 const seed = {
   users: [
-    { id: 1, fullName: "Nadia Keller", email: "nadia.keller@git.example", role: "validator", className: "", provider: "entra-mock", entraObjectId: "mock-nadia-keller", lastLoginAt: null },
-    { id: 2, fullName: "Marc Dubois", email: "marc.dubois@git.example", role: "trainer", className: "IT-2026-A", provider: "entra-mock", entraObjectId: "mock-marc-dubois", lastLoginAt: null },
-    { id: 3, fullName: "Amir Benali", email: "amir.benali@git.example", role: "student", className: "IT-2026-A", provider: "entra-mock", entraObjectId: "mock-amir-benali", lastLoginAt: null },
-    { id: 4, fullName: "Sara Nguyen", email: "sara.nguyen@git.example", role: "student", className: "IT-2026-A", provider: "entra-mock", entraObjectId: "mock-sara-nguyen", lastLoginAt: null },
-    { id: 5, fullName: "Leo Martin", email: "leo.martin@git.example", role: "student", className: "IT-2026-B", provider: "entra-mock", entraObjectId: "mock-leo-martin", lastLoginAt: null },
-    { id: 6, fullName: "Administrateur Lab", email: "admin@git.example", role: "admin", className: "", provider: "entra-mock", entraObjectId: "mock-admin-lab", lastLoginAt: null }
+    { id: 1, fullName: "Nadia Keller", email: "nadia.keller@git.swiss", role: "validator", className: "", provider: "entra-mock", entraObjectId: "mock-nadia-keller", lastLoginAt: null },
+    { id: 2, fullName: "Marc Dubois", email: "marc.dubois@git.swiss", role: "trainer", className: "E1", provider: "entra-mock", entraObjectId: "mock-marc-dubois", lastLoginAt: null },
+    { id: 3, fullName: "Amir Benali", email: "amir.benali@git.swiss", role: "student", className: "E1", provider: "entra-mock", entraObjectId: "mock-amir-benali", lastLoginAt: null },
+    { id: 4, fullName: "Sara Nguyen", email: "sara.nguyen@git.swiss", role: "student", className: "E1", provider: "entra-mock", entraObjectId: "mock-sara-nguyen", lastLoginAt: null },
+    { id: 5, fullName: "Leo Martin", email: "leo.martin@git.swiss", role: "student", className: "E2", provider: "entra-mock", entraObjectId: "mock-leo-martin", lastLoginAt: null },
+    { id: 6, fullName: "Administrateur Lab", email: "admin@git.swiss", role: "admin", className: "", provider: "entra-mock", entraObjectId: "mock-admin-lab", lastLoginAt: null }
   ],
   currentUser: null,
   courses: [
@@ -402,6 +412,7 @@ let state = normaliseState(loadState());
 refreshLifecycleStatuses();
 
 function loadState() {
+  if (DATA_MODE === "api") return structuredClone(seed);
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return structuredClone(seed);
   try {
@@ -412,19 +423,206 @@ function loadState() {
 }
 
 function saveState() {
+  if (DATA_MODE === "api") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    ...options
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload?.message || payload?.error?.message || payload?.detail || `Erreur API ${response.status}`;
+    throw new Error(message);
+  }
+  return payload?.data ?? payload;
+}
+
+function mapApiRole(role) {
+  if (role === "teacher") return "trainer";
+  return role;
+}
+
+function mapApiStatus(status) {
+  const map = {
+    running: "active",
+    stopped: "expired",
+    down: "error"
+  };
+  return map[status] || status;
+}
+
+function mapFrontendVmStatus(status) {
+  const map = {
+    active: "running",
+    expiring: "running",
+    expired: "expired",
+    destroyed: "destroyed",
+    error: "down"
+  };
+  return map[status] || status;
+}
+
+function mapApiUser(user) {
+  const role = mapApiRole(user.role);
+  return {
+    id: user.id,
+    fullName: user.full_name,
+    email: user.email,
+    role,
+    className: user.class_name || "",
+    provider: "entra-id",
+    entraObjectId: `api-user-${user.id}`,
+    lastLoginAt: user.created_at || null
+  };
+}
+
+function mapApiCourse(course, index) {
+  const fallback = seed.courses[index % seed.courses.length] || {};
+  return {
+    id: course.id,
+    slug: fallback.slug || `course-${course.id}`,
+    name: course.name,
+    className: fallback.className || "E1-E5",
+    budgetChf: fallback.budgetChf || 200,
+    description: course.description || ""
+  };
+}
+
+function mapApiTemplate(template) {
+  const fallbackSlug = template.name.toLowerCase().replaceAll(" ", "-");
+  return {
+    id: template.id,
+    slug: fallbackSlug,
+    courseId: template.course_id,
+    name: template.name,
+    description: template.description || "",
+    flavor: {
+      name: `lab.${template.cpu}c-${template.ram_gb}g`,
+      cpu: template.cpu,
+      ramGb: template.ram_gb,
+      diskGb: template.disk_gb
+    },
+    image: "ubuntu-22.04-lts",
+    tools: [],
+    hourlyCostChf: Number(template.estimated_cost_per_hour_chf || 0),
+    playbook: template.ansible_playbook || ""
+  };
+}
+
+function mapApiRequest(request) {
+  return {
+    id: request.id,
+    requesterId: request.requester_id,
+    courseId: request.course_id,
+    templateId: request.template_id,
+    quantity: request.quantity,
+    startDate: request.start_date,
+    endDate: request.end_date,
+    status: mapApiStatus(request.status),
+    reason: request.request_reason || "",
+    validatorId: request.validator_id,
+    decisionComment: request.decision_comment || "",
+    createdAt: request.created_at,
+    approvedAt: request.status === "approved" ? request.updated_at : null,
+    provisioningAt: request.status === "provisioning" ? request.updated_at : null,
+    provisionedAt: null,
+    destroyedAt: null
+  };
+}
+
+function mapApiVm(vm) {
+  return {
+    id: vm.id,
+    requestId: vm.request_id,
+    ownerId: vm.owner_id,
+    providerVmId: vm.provider_vm_id,
+    name: vm.name,
+    ip: vm.ip_address || "-",
+    status: mapApiStatus(vm.status),
+    sshUser: vm.ssh_username || "student",
+    sshKey: vm.ssh_key_fingerprint || "",
+    network: normaliseNetworkSegment(vm.network_segment),
+    createdAt: vm.created_at,
+    provisionedAt: vm.created_at,
+    startDate: vm.start_date,
+    endDate: vm.end_date,
+    destroyedAt: vm.destroyed_at
+  };
+}
+
+function mapApiAuditEvent(event) {
+  return {
+    id: event.id,
+    at: event.created_at,
+    actorId: event.actor_id,
+    actorName: byId(state.users, event.actor_id)?.fullName || "Systeme",
+    actorEmail: byId(state.users, event.actor_id)?.email || "",
+    actorRole: byId(state.users, event.actor_id)?.role || "system",
+    type: event.event_type,
+    severity: event.severity,
+    targetType: event.vm_id ? "vm" : event.request_id ? "request" : "-",
+    targetId: event.vm_id || event.request_id || "-",
+    scope: "-",
+    detail: event.event_message
+  };
+}
+
+async function hydrateFromApi() {
+  const [users, courses, templates, requests, vms, auditEvents, notifications, dashboardSummary] = await Promise.all([
+    apiRequest("/users"),
+    apiRequest("/courses"),
+    apiRequest("/vm-templates"),
+    apiRequest("/vm-requests"),
+    apiRequest("/virtual-machines"),
+    apiRequest("/audit-events"),
+    apiRequest("/notifications"),
+    apiRequest("/dashboard/summary")
+  ]);
+
+  state.users = users.map(mapApiUser);
+  state.courses = courses.map(mapApiCourse);
+  state.templates = templates.map(mapApiTemplate);
+  state.requests = requests.map(mapApiRequest);
+  state.vms = vms.map(mapApiVm);
+  state.events = auditEvents.map(mapApiAuditEvent);
+  state.notifications = notifications;
+  state.dashboardSummary = dashboardSummary;
+  state = normaliseState(state);
+}
+
+async function refreshFromApiAndRender() {
+  if (DATA_MODE !== "api") {
+    renderAll();
+    return;
+  }
+  try {
+    await hydrateFromApi();
+  } catch (error) {
+    console.error(error);
+    alert(`Impossible de synchroniser avec l'API: ${error.message}`);
+  }
+  renderAll();
 }
 
 function normaliseState(input) {
   const data = structuredClone(input);
+  const sessionUser = data.currentUser;
   data.users ||= [];
   data.courses ||= [];
   data.templates ||= [];
   data.requests ||= [];
   data.vms ||= [];
   data.events ||= [];
-  // La session mockee n'est pas restauree depuis localStorage: un choix explicite est requis a chaque chargement.
-  data.currentUser = null;
+  // En mode local, la session n'est pas restauree depuis localStorage. En mode API,
+  // elle vient exclusivement de /auth/me et peut donc etre conservee pendant le rendu.
+  data.currentUser = DATA_MODE === "api" && sessionUser ? sessionUser : null;
 
   data.users.forEach((user) => {
     user.provider ||= "entra-mock";
@@ -1053,6 +1251,18 @@ function renderPermissionStates() {
 function renderLoginUsers() {
   const select = document.querySelector("#mockLoginUser");
   const list = document.querySelector("#mockLoginUsers");
+  const hint = document.querySelector("#loginAuthHint");
+
+  if (AUTH_MODE_FRONT === "oidc") {
+    select.innerHTML = "";
+    list.innerHTML = "";
+    list.hidden = true;
+    hint.textContent = "Authentification via Microsoft Entra ID. Les comptes autorisés sont ceux du Geneva Institute of Technology.";
+    return;
+  }
+
+  list.hidden = false;
+  hint.textContent = "Mode développement : sélection d'un profil de test sans appel au tenant Microsoft.";
   select.innerHTML = state.users
     .map((user) => `<option value="${user.id}">${user.fullName} - ${roleLabel(user.role)}</option>`)
     .join("");
@@ -1070,7 +1280,51 @@ function renderLoginUsers() {
     .join("");
 }
 
-function loginAsSelectedUser() {
+async function startInstitutionalLogin() {
+  if (DATA_MODE !== "api") {
+    loginAsSelectedUser();
+    return;
+  }
+
+  const button = document.querySelector("#mockMicrosoftLoginButton");
+  button.disabled = true;
+  button.textContent = "Connexion en cours...";
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      credentials: "include",
+      redirect: "manual"
+    });
+    const payload = await response.clone().json().catch(() => null);
+
+    if (payload?.data?.mode === "mock") {
+      const user = await apiRequest(`/auth/mock-login/${API_DEV_LOGIN_USER_ID}`, { method: "POST" });
+      state.currentUser = buildAuthUser(mapApiUser(user));
+      await hydrateFromApi();
+      renderAll();
+      setView("dashboard");
+      return;
+    }
+
+    window.location.href = `${API_BASE_URL}/auth/login`;
+  } catch (error) {
+    console.error(error);
+    alert(`Connexion impossible: ${error.message}. Verifiez que le backend FastAPI tourne sur ${API_ORIGIN}.`);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = `
+      <span class="ms-grid" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </span>
+      Se connecter avec Microsoft 365
+    `;
+  }
+}
+
+async function loginAsSelectedUser() {
+  if (AUTH_MODE_FRONT === "oidc") {
+    await startInstitutionalLogin();
+    return;
+  }
   const user = byId(state.users, document.querySelector("#mockLoginUser").value);
   if (!user) return;
   document.body.classList.add("login-leaving");
@@ -1090,13 +1344,16 @@ function loginAsSelectedUser() {
   }, 180);
 }
 
-function logout() {
+async function logout() {
   const user = currentUser();
   addEvent("logout", `${user?.fullName || "Utilisateur"} déconnecté.`, {
     severity: "info",
     targetType: "user",
     targetId: user?.id || "-"
   });
+  if (DATA_MODE === "api") {
+    await apiRequest("/auth/logout", { method: "POST" }).catch((error) => console.warn(error));
+  }
   state.currentUser = null;
   saveState();
   renderAll();
@@ -1383,7 +1640,7 @@ function updateEstimate() {
   document.querySelector("#requestEstimate").textContent = `Coût estimé : ${formatCost(cost)}`;
 }
 
-function createRequest(event) {
+async function createRequest(event) {
   event.preventDefault();
   const user = currentUser();
   if (!user) {
@@ -1409,6 +1666,30 @@ function createRequest(event) {
   if (quantity > 1 && !requirePermission("createGroupRequest")) return;
   if (new Date(endDate) <= new Date(startDate)) {
     alert("La date de fin doit être après la date de début.");
+    return;
+  }
+  if (DATA_MODE === "api") {
+    try {
+      await apiRequest("/vm-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          requester_id: can("createForOtherUser", user) ? Number(document.querySelector("#requesterId").value) : user.id,
+          course_id: template.courseId,
+          template_id: template.id,
+          quantity,
+          start_date: startDate,
+          end_date: endDate,
+          request_reason: document.querySelector("#requestReason").value
+        })
+      });
+      await refreshFromApiAndRender();
+      setView("validation");
+      event.target.reset();
+      renderSelectors();
+      updateEstimate();
+    } catch (error) {
+      alert(`Demande non enregistree: ${error.message}`);
+    }
     return;
   }
   const request = {
@@ -1444,9 +1725,25 @@ function createRequest(event) {
   updateEstimate();
 }
 
-function approveRequest(id) {
+async function approveRequest(id) {
   if (!requirePermission("approveRequest")) return;
   const request = byId(state.requests, id);
+  if (DATA_MODE === "api") {
+    try {
+      await apiRequest(`/vm-requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "approved",
+          validator_id: currentUser().id,
+          decision_comment: "Demande approuvee."
+        })
+      });
+      await refreshFromApiAndRender();
+    } catch (error) {
+      alert(`Validation impossible: ${error.message}`);
+    }
+    return;
+  }
   if (!transitionEntity(request, "approved", "approvedAt")) return;
   request.validatorId = currentUser().id;
   request.decisionComment = "Demande approuvée.";
@@ -1460,9 +1757,25 @@ function approveRequest(id) {
   renderAll();
 }
 
-function refuseRequest(id) {
+async function refuseRequest(id) {
   if (!requirePermission("refuseRequest")) return;
   const request = byId(state.requests, id);
+  if (DATA_MODE === "api") {
+    try {
+      await apiRequest(`/vm-requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "refused",
+          validator_id: currentUser().id,
+          decision_comment: "Demande refusee."
+        })
+      });
+      await refreshFromApiAndRender();
+    } catch (error) {
+      alert(`Refus impossible: ${error.message}`);
+    }
+    return;
+  }
   if (!transitionEntity(request, "refused", null)) return;
   request.validatorId = currentUser().id;
   request.decisionComment = "Demande refusée.";
@@ -1476,7 +1789,7 @@ function refuseRequest(id) {
   renderAll();
 }
 
-function provisionRequest(requestId) {
+async function provisionRequest(requestId) {
   if (!requirePermission("provisionVm")) return;
   const request = requestId ? byId(state.requests, requestId) : state.requests.find((item) => item.status === "approved");
   if (!request) {
@@ -1485,6 +1798,16 @@ function provisionRequest(requestId) {
   }
   if (request.status !== "approved") {
     alert(`La demande #${request.id} n'est pas en statut approuvé.`);
+    return;
+  }
+  if (DATA_MODE === "api") {
+    try {
+      await apiRequest(`/vm-requests/${request.id}/provision`, { method: "POST" });
+      await refreshFromApiAndRender();
+      alert("Intention de provisioning envoyee. Terraform pourra confirmer le resultat via l'API.");
+    } catch (error) {
+      alert(`Provisioning impossible: ${error.message}`);
+    }
     return;
   }
   const owner = ownerForRequest(request);
@@ -1549,11 +1872,26 @@ function simulateProvisioning() {
   provisionRequest();
 }
 
-function destroyExpiredVms() {
+async function destroyExpiredVms() {
   if (!requirePermission("destroyExpiredVms")) return;
   const expired = state.vms.filter((vm) => vm.status === "expired");
   if (expired.length === 0) {
     alert("Aucune VM expirée à détruire.");
+    return;
+  }
+  if (DATA_MODE === "api") {
+    try {
+      await Promise.all(expired.map((vm) => apiRequest(`/virtual-machines/${vm.id}/destruction-result`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "destroyed",
+          destroyed_at: new Date().toISOString()
+        })
+      })));
+      await refreshFromApiAndRender();
+    } catch (error) {
+      alert(`Destruction non confirmee: ${error.message}`);
+    }
     return;
   }
   expired.forEach((vm) => {
@@ -1685,6 +2023,25 @@ function renderAll() {
   renderPermissionStates();
 }
 
+async function initApp() {
+  if (DATA_MODE !== "api") {
+    renderAll();
+    updateEstimate();
+    return;
+  }
+
+  try {
+    const user = await apiRequest("/auth/me");
+    state.currentUser = buildAuthUser(mapApiUser(user));
+    await hydrateFromApi();
+    renderAll();
+    updateEstimate();
+  } catch {
+    state.currentUser = null;
+    renderAll();
+  }
+}
+
 document.querySelectorAll(".nav-item").forEach((button) => {
   button.addEventListener("click", () => setView(button.dataset.view));
 });
@@ -1726,5 +2083,4 @@ document.querySelector("#requestsTable").addEventListener("click", (event) => {
   if (provision) provisionRequest(provision.dataset.provision);
 });
 
-renderAll();
-updateEstimate();
+initApp();

@@ -13,6 +13,13 @@ branch_labels = None
 depends_on = None
 
 
+def execute_batch(sql: str) -> None:
+    for statement in sql.split(";"):
+        statement = statement.strip()
+        if statement:
+            op.execute(statement)
+
+
 def upgrade() -> None:
     op.execute("CREATE TYPE user_role AS ENUM ('student', 'teacher', 'validator', 'admin')")
     op.execute("CREATE TYPE request_status AS ENUM ('pending', 'approved', 'refused', 'provisioning', 'provisioned', 'failed', 'expired', 'destroyed')")
@@ -21,7 +28,7 @@ def upgrade() -> None:
     op.execute("CREATE TYPE audit_severity AS ENUM ('info', 'success', 'warning', 'danger')")
     op.execute("CREATE TYPE notification_type AS ENUM ('vm_request_approved', 'vm_request_refused', 'vm_expiring_soon', 'vm_expired', 'vm_destroyed')")
 
-    op.execute(
+    execute_batch(
         """
         CREATE TABLE users (
           id SERIAL PRIMARY KEY,
@@ -134,7 +141,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
+    execute_batch(
         """
         DROP VIEW IF EXISTS expiring_vms;
         DROP TABLE IF EXISTS notifications;
