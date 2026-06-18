@@ -27,12 +27,12 @@
   - les fonctions query.* evitent de dupliquer la logique dans chaque vue.
 */
 
-const STORAGE_KEY = "git-cloud-lab-control-center-v3";
+const STORAGE_KEY = "git-cloud-lab-control-center-v4";
 const CLOCK_NOW = "2026-06-17T10:00:00";
 const EXPIRING_THRESHOLD_HOURS = 24;
 
 const ROLE_LABELS = {
-  student: "Etudiant",
+  student: "Étudiant",
   trainer: "Formateur",
   validator: "Validateur",
   admin: "Admin"
@@ -102,17 +102,17 @@ const seed = {
   currentUser: null,
   courses: [
     { id: 1, slug: "linux-admin", name: "Administration Linux", className: "IT-2026-A", budgetChf: 160 },
-    { id: 2, slug: "dev-web", name: "Developpement Web", className: "IT-2026-A", budgetChf: 180 },
-    { id: 3, slug: "data-science", name: "Data Science", className: "IT-2026-B", budgetChf: 260 },
-    { id: 4, slug: "securite", name: "Cybersecurity Lab", className: "IT-2026-C", budgetChf: 220 }
+    { id: 2, slug: "dev-web", name: "Développement Web", className: "IT-2026-A", budgetChf: 180 },
+    { id: 3, slug: "data-science", name: "Science des données", className: "IT-2026-B", budgetChf: 260 },
+    { id: 4, slug: "securite", name: "Laboratoire cybersécurité", className: "IT-2026-C", budgetChf: 220 }
   ],
   templates: [
     {
       id: 1,
       slug: "linux-admin",
       courseId: 1,
-      name: "Linux Admin",
-      description: "Ubuntu LTS avec outils systeme, SSH securise et nginx.",
+      name: "Administration Linux",
+      description: "Ubuntu LTS avec outils système, SSH sécurisé et nginx.",
       flavor: { name: "lab.small", cpu: 2, ramGb: 4, diskGb: 40 },
       image: "ubuntu-22.04-lts",
       tools: ["bash", "vim", "systemd", "nginx", "ufw"],
@@ -123,7 +123,7 @@ const seed = {
       id: 2,
       slug: "dev-web",
       courseId: 2,
-      name: "Dev Web",
+      name: "Développement Web",
       description: "Environnement Git, Node.js, Python et outils web.",
       flavor: { name: "lab.small-plus", cpu: 2, ramGb: 4, diskGb: 60 },
       image: "ubuntu-22.04-lts",
@@ -135,7 +135,7 @@ const seed = {
       id: 3,
       slug: "data-science",
       courseId: 3,
-      name: "Data Science",
+      name: "Science des données",
       description: "Python, Jupyter, pandas, scikit-learn et notebooks.",
       flavor: { name: "lab.medium", cpu: 4, ramGb: 8, diskGb: 80 },
       image: "ubuntu-22.04-lts",
@@ -147,8 +147,8 @@ const seed = {
       id: 4,
       slug: "securite",
       courseId: 4,
-      name: "Cybersecurity Lab",
-      description: "VM isolee avec outils securite autorises pour laboratoire.",
+      name: "Laboratoire cybersécurité",
+      description: "VM isolée avec outils sécurité autorisés pour laboratoire.",
       flavor: { name: "lab.security", cpu: 2, ramGb: 4, diskGb: 50 },
       image: "ubuntu-22.04-lts-isolated",
       tools: ["nmap", "tcpdump", "wireshark-cli", "fail2ban"],
@@ -222,7 +222,7 @@ const seed = {
       status: "refused",
       reason: "Besoin personnel hors periode",
       validatorId: 1,
-      decisionComment: "Duree trop longue pour le pilote.",
+      decisionComment: "Durée trop longue pour le pilote.",
       createdAt: "2026-06-16T09:45:00",
       approvedAt: null,
       provisioningAt: null,
@@ -258,7 +258,7 @@ const seed = {
       status: "expiring",
       reason: "Notebook Jupyter pour analyse de donnees",
       validatorId: 1,
-      decisionComment: "OK, duree courte et cout maitrise.",
+      decisionComment: "OK, durée courte et coût maîtrisé.",
       createdAt: "2026-06-15T16:20:00",
       approvedAt: "2026-06-15T16:44:00",
       provisioningAt: "2026-06-16T08:10:00",
@@ -276,7 +276,7 @@ const seed = {
       status: "destroyed",
       reason: "Revision projet web",
       validatorId: 1,
-      decisionComment: "Environnement ferme apres echeance.",
+      decisionComment: "Environnement fermé après échéance.",
       createdAt: "2026-06-09T15:30:00",
       approvedAt: "2026-06-09T16:00:00",
       provisioningAt: "2026-06-10T09:03:00",
@@ -292,9 +292,9 @@ const seed = {
       startDate: "2026-06-17",
       endDate: "2026-06-19",
       status: "error",
-      reason: "Test de reprise apres erreur provisioning",
+      reason: "Test de reprise après erreur de provisionnement",
       validatorId: 1,
-      decisionComment: "Erreur conservee pour demontrer le suivi.",
+      decisionComment: "Erreur conservée pour démontrer le suivi.",
       createdAt: "2026-06-17T07:35:00",
       approvedAt: "2026-06-17T07:42:00",
       provisioningAt: "2026-06-17T07:48:00",
@@ -390,11 +390,11 @@ const seed = {
     }
   ],
   events: [
-    "2026-06-17 08:20 - Demande groupee Linux Admin enregistree.",
-    "2026-06-16 13:40 - Demande Dev Web approuvee.",
+    "2026-06-17 08:20 - Demande groupée Linux Admin enregistrée.",
+    "2026-06-16 13:40 - Demande développement web approuvée.",
     "2026-06-13 10:14 - VM git-linux-admin-amir-001 active.",
-    "2026-06-11 15:24 - VM git-cyber-amir-001 provisionnee.",
-    "2026-06-16 00:00 - VM git-cyber-amir-001 arrivee a expiration."
+    "2026-06-11 15:24 - VM git-cyber-amir-001 provisionnée.",
+    "2026-06-16 00:00 - VM git-cyber-amir-001 arrivée à expiration."
   ]
 };
 
@@ -494,7 +494,7 @@ function currentUser() {
 }
 
 function roleLabel(role) {
-  return ROLE_LABELS[role] || role || "Invite";
+  return ROLE_LABELS[role] || role || "Invité";
 }
 
 function can(action, user = currentUser()) {
@@ -503,12 +503,12 @@ function can(action, user = currentUser()) {
 
 function requirePermission(action) {
   if (can(action)) return true;
-  addEvent("permission_denied", `Action non autorisee: ${action}.`, {
+  addEvent("permission_denied", `Action non autorisée: ${action}.`, {
     severity: "warning",
     targetType: "permission",
     targetId: action
   });
-  alert("Action non autorisee pour votre role.");
+  alert("Action non autorisée pour votre rôle.");
   saveState();
   renderEvents();
   renderAudit();
@@ -521,7 +521,7 @@ function normaliseAuditEvent(event, index) {
       id: event.id || index + 1,
       at: event.at || CLOCK_NOW,
       actorId: event.actorId ?? null,
-      actorName: event.actorName || "Systeme",
+      actorName: event.actorName || "Système",
       actorEmail: event.actorEmail || "",
       actorRole: event.actorRole || "system",
       type: event.type,
@@ -538,7 +538,7 @@ function normaliseAuditEvent(event, index) {
     id: index + 1,
     at: parts.length > 1 ? parts[0].replace(" ", "T") : CLOCK_NOW,
     actorId: null,
-    actorName: "Systeme",
+    actorName: "Système",
     actorEmail: "",
     actorRole: "system",
     type: "legacy",
@@ -667,7 +667,7 @@ function canTransition(current, next) {
 function transitionEntity(entity, nextStatus, timestampField) {
   if (entity.status === nextStatus) return true;
   if (!canTransition(entity.status, nextStatus)) {
-    addEvent("transition_denied", `Transition refusee: ${entity.status} -> ${nextStatus} pour #${entity.id}.`, {
+    addEvent("transition_denied", `Transition refusée: ${entity.status} -> ${nextStatus} pour #${entity.id}.`, {
       severity: "warning",
       targetType: "state-machine",
       targetId: entity.id
@@ -732,39 +732,39 @@ function dataControls() {
 
   return [
     {
-      label: "Modele prix",
+      label: "Modèle prix",
       value: "Infomaniak",
-      detail: `Base ${formatCost(PRICING_MODEL.referenceMonthlyChf)}/mois pour ${PRICING_MODEL.referenceCpu} CPU, ${PRICING_MODEL.referenceRamGb} GB RAM, ${PRICING_MODEL.referenceDiskGb} GB disque.`,
+      detail: `Base ${formatCost(PRICING_MODEL.referenceMonthlyChf)}/mois pour ${PRICING_MODEL.referenceCpu} CPU, ${PRICING_MODEL.referenceRamGb} Go RAM, ${PRICING_MODEL.referenceDiskGb} Go disque.`,
       tone: "success"
     },
     {
       label: "Dates de fin",
       value: missingVmEndDate === 0 && invalidDates === 0 ? "OK" : `${missingVmEndDate + invalidDates} anomalie(s)`,
-      detail: "Aucune VM active sans echeance.",
+      detail: "Aucune VM active sans échéance.",
       tone: missingVmEndDate === 0 && invalidDates === 0 ? "success" : "danger"
     },
     {
-      label: "Catalogue couts",
-      value: missingCostTemplate === 0 ? "OK" : `${missingCostTemplate} template manquant`,
-      detail: "Chaque demande utilise un template avec cout/h.",
+      label: "Catalogue coûts",
+      value: missingCostTemplate === 0 ? "OK" : `${missingCostTemplate} modèle manquant`,
+      detail: "Chaque demande utilise un modèle avec coût/h.",
       tone: missingCostTemplate === 0 ? "success" : "danger"
     },
     {
-      label: "Provisioning",
+      label: "Provisionnement",
       value: pendingProvisioning,
-      detail: "Demande(s) approuvee(s) prete(s) a envoyer a Terraform.",
+      detail: "Demande(s) approuvée(s) prête(s) à transmettre à Terraform.",
       tone: pendingProvisioning > 0 ? "warning" : "neutral"
     },
     {
       label: "Nettoyage",
       value: expiredToDestroy,
-      detail: "VM expiree(s) a detruire pour stopper les couts.",
+      detail: "VM expirée(s) à détruire pour stopper les coûts.",
       tone: expiredToDestroy > 0 ? "warning" : "success"
     },
     {
-      label: "Budget consomme",
+      label: "Budget consommé",
       value: `${budgetPercent({ budgetChf: totalBudget }, totalReal, totalCommitted)}%`,
-      detail: `${formatCost(totalReal)} reels + ${formatCost(totalCommitted)} engages sur ${formatCost(totalBudget)}.`,
+      detail: `${formatCost(totalReal)} réels + ${formatCost(totalCommitted)} engagés sur ${formatCost(totalBudget)}.`,
       tone: budgetRatio > 0.8 ? "danger" : "success"
     }
   ];
@@ -773,13 +773,13 @@ function dataControls() {
 function statusBadge(status) {
   const labels = {
     pending: "En attente",
-    approved: "Approuvee",
-    provisioning: "Provisioning",
+    approved: "Approuvée",
+    provisioning: "Provisionnement",
     active: "Active",
-    expiring: "Expire bientot",
-    expired: "Expiree",
-    destroyed: "Detruite",
-    refused: "Refusee",
+    expiring: "Expire bientôt",
+    expired: "Expirée",
+    destroyed: "Détruite",
+    refused: "Refusée",
     error: "Erreur"
   };
   return `<span class="badge status-${status}">${labels[status] || status}</span>`;
@@ -816,7 +816,7 @@ function addEvent(type, detail, metadata = {}) {
     id: Math.max(...state.events.map((event) => Number(event.id) || 0), 0) + 1,
     at: CLOCK_NOW,
     actorId: actor?.id ?? null,
-    actorName: actor?.fullName || "Systeme",
+    actorName: actor?.fullName || "Système",
     actorEmail: actor?.email || "",
     actorRole: actor?.role || "system",
     severity: metadata.severity || inferAuditSeverity(eventType),
@@ -879,7 +879,7 @@ const query = {
         const owner = byId(state.users, vm.ownerId);
         const left = hoursUntil(vm.endDate);
         if (vm.status === "destroyed") return null;
-        if (vm.status === "expired" || left < 0) return { vm, owner, label: "A detruire", tone: "red" };
+      if (vm.status === "expired" || left < 0) return { vm, owner, label: "À détruire", tone: "red" };
         if (vm.status === "error") return { vm, owner, label: "Erreur technique", tone: "red" };
         if (left <= EXPIRING_THRESHOLD_HOURS) return { vm, owner, label: `Expire dans ${Math.max(0, Math.ceil(left))}h`, tone: "amber" };
         return null;
@@ -934,8 +934,8 @@ const query = {
       ["Demandes en attente", pending, "warning"],
       ["VM expirees", expired, "danger"],
       ["VM en erreur", error, "danger"],
-      ["VM detruites", destroyed, "neutral"],
-      ["Cout reel actuel", formatCost(realCost), "accent"]
+      ["VM détruites", destroyed, "neutral"],
+      ["Coût réel actuel", formatCost(realCost), "accent"]
     ];
   }
 };
@@ -948,12 +948,12 @@ function isViewAllowed(viewName) {
 
 function setView(viewName) {
   if (!isViewAllowed(viewName)) {
-    addEvent("permission_denied", `Acces refuse a la vue ${viewName}.`, {
+    addEvent("permission_denied", `Accès refusé à la vue ${viewName}.`, {
       severity: "warning",
       targetType: "view",
       targetId: viewName
     });
-    alert("Acces reserve pour votre role.");
+    alert("Accès réservé pour votre rôle.");
     saveState();
     return;
   }
@@ -1027,10 +1027,10 @@ function renderAuthShell() {
     button.classList.toggle("is-disabled", !allowed);
     button.hidden = !allowed;
     button.style.display = allowed ? "" : "none";
-    button.title = allowed ? "" : "Acces reserve a certains roles";
+    button.title = allowed ? "" : "Accès réservé à certains rôles";
   });
 
-  document.querySelector('[data-view="validation"]').textContent = isPrivileged(user) ? "Demandes a valider" : "Mes demandes";
+  document.querySelector('[data-view="validation"]').textContent = isPrivileged(user) ? "Demandes à valider" : "Mes demandes";
   document.querySelector('[data-view="vms"]').textContent = isPrivileged(user) ? "Parc VM" : "Mes VM";
 }
 
@@ -1039,7 +1039,7 @@ function setActionState(selector, allowed) {
   if (!element) return;
   element.disabled = !allowed;
   element.classList.toggle("is-disabled", !allowed);
-  element.title = allowed ? "" : "Acces reserve";
+  element.title = allowed ? "" : "Accès réservé";
 }
 
 function renderPermissionStates() {
@@ -1077,7 +1077,7 @@ function loginAsSelectedUser() {
   window.setTimeout(() => {
     user.lastLoginAt = CLOCK_NOW;
     state.currentUser = buildAuthUser(user);
-    addEvent("login", `${user.fullName} connecte via Microsoft 365 mock.`, {
+    addEvent("login", `${user.fullName} connecté via Microsoft 365 simulé.`, {
       severity: "success",
       targetType: "user",
       targetId: user.id,
@@ -1092,7 +1092,7 @@ function loginAsSelectedUser() {
 
 function logout() {
   const user = currentUser();
-  addEvent("logout", `${user?.fullName || "Utilisateur"} deconnecte.`, {
+  addEvent("logout", `${user?.fullName || "Utilisateur"} déconnecté.`, {
     severity: "info",
     targetType: "user",
     targetId: user?.id || "-"
@@ -1105,29 +1105,47 @@ function logout() {
 function renderKpis() {
   document.querySelector("#kpiGrid").innerHTML = query.kpis()
     .map(([label, value, tone]) => {
-      const featuredClass = label === "Cout reel actuel" ? " kpi-featured" : "";
+      const featuredClass = label === "Coût réel actuel" ? " kpi-featured" : "";
       return `<div class="kpi kpi-${tone}${featuredClass}"><span>${label}</span><strong>${value}</strong></div>`;
     })
     .join("");
 }
 
 function renderCatalog() {
+  const icon = (path) => `
+    <svg class="spec-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="${path}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  `;
   document.querySelector("#templateGrid").innerHTML = state.templates
     .map((template) => {
       const course = byId(state.courses, template.courseId);
       return `
         <article class="template-card">
-          <h3>${template.name}</h3>
-          <p>${template.description}</p>
-          <div class="template-meta">
-            <span class="badge">${course.name}</span>
-            <span class="badge">${template.flavor.name}</span>
-            <span class="badge">${template.flavor.cpu} CPU</span>
-            <span class="badge">${template.flavor.ramGb} GB RAM</span>
-            <span class="badge">${template.flavor.diskGb} GB disque</span>
-            <span class="badge">${template.image}</span>
-            <span class="badge status-active">${formatHourlyCost(template.hourlyCostChf)}</span>
-            <span class="badge status-approved">${formatCost(template.monthlyCostChf)}/mois calcule</span>
+          <div class="course-mark" aria-hidden="true">${String(course.name).slice(0, 2).toUpperCase()}</div>
+          <div class="template-content">
+            <div class="template-card-head">
+              <div>
+                <span class="template-course">${course.className}</span>
+                <h3>${course.name}</h3>
+              </div>
+              <span class="template-price">${formatHourlyCost(template.hourlyCostChf)}</span>
+            </div>
+            <p>${template.description}</p>
+            <div class="template-meta">
+              <span>${icon("M4 7h16M4 12h16M4 17h16")} ${template.flavor.cpu} CPU</span>
+              <span>${icon("M6 19V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z")} ${template.flavor.ramGb} Go RAM</span>
+              <span>${icon("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m18 0-3.5-7h-11L3 15m18 0H3")} ${template.flavor.diskGb} Go disque</span>
+              <span>${template.flavor.name}</span>
+            </div>
+            <div class="template-tools">
+              <strong>Outils inclus</strong>
+              <span>${template.tools.slice(0, 5).join(", ")}</span>
+            </div>
+            <div class="template-foot">
+              <span>${template.image}</span>
+              <span>${formatCost(template.monthlyCostChf)}/mois estimé</span>
+            </div>
           </div>
         </article>
       `;
@@ -1229,7 +1247,7 @@ function renderAlerts() {
             <div class="list-item">
               <div>
                 <strong>${vm.name}</strong>
-                <span>${owner.fullName} - fin ${vm.endDate} - cout reel ${formatCost(realVmCost(vm))}</span>
+                <span>${owner.fullName} - fin ${vm.endDate} - coût réel ${formatCost(realVmCost(vm))}</span>
               </div>
               <span class="badge status-${tone === "red" ? "error" : "expiring"}">${label}</span>
             </div>
@@ -1246,8 +1264,8 @@ function renderCourseCosts() {
       <div class="list-item cost-row">
         <div>
           <strong>${course.name}</strong>
-          <span>${course.className} - ${requestCount} demande(s) - estime en attente ${formatCost(committed)} - engage reel ${formatCost(real)} - reste ${formatCost(remaining)}</span>
-          <div class="meter" aria-label="Budget consomme ${percent}%">
+          <span>${course.className} - ${requestCount} demande(s) - estimé en attente ${formatCost(committed)} - engagé réel ${formatCost(real)} - reste ${formatCost(remaining)}</span>
+          <div class="meter" aria-label="Budget consommé ${percent}%">
             <i style="width: ${percent}%"></i>
           </div>
         </div>
@@ -1273,18 +1291,18 @@ function renderLifecycle() {
   const steps = [
     ["Demandes", state.requests.length],
     ["En attente", query.requests({ status: "pending" }).length],
-    ["Approuvees", query.requests({ status: "approved" }).length],
-    ["Provisioning", query.requests({ status: "provisioning" }).length],
+    ["Approuvées", query.requests({ status: "approved" }).length],
+    ["Provisionnement", query.requests({ status: "provisioning" }).length],
     ["Actives", query.vms().filter((vm) => ["active", "expiring"].includes(vm.status)).length],
-    ["Expirees", query.vms({ status: "expired" }).length],
-    ["Detruites", query.vms({ status: "destroyed" }).length]
+    ["Expirées", query.vms({ status: "expired" }).length],
+    ["Détruites", query.vms({ status: "destroyed" }).length]
   ];
   document.querySelector("#lifecycleList").innerHTML = steps
     .map(([label, count]) => `
       <div class="list-item">
         <div>
           <strong>${label}</strong>
-          <span>Etape du cycle de vie</span>
+          <span>Étape du cycle de vie</span>
         </div>
         <span class="badge">${count}</span>
       </div>
@@ -1318,7 +1336,7 @@ function renderAuditFilters() {
   const currentSeverity = severitySelect.value;
   const currentActor = actorSelect.value;
   typeSelect.innerHTML = `<option value="">Tous les types</option>${types.map((type) => `<option value="${type}">${type}</option>`).join("")}`;
-  severitySelect.innerHTML = `<option value="">Toutes gravites</option>${severities.map((severity) => `<option value="${severity}">${severity}</option>`).join("")}`;
+  severitySelect.innerHTML = `<option value="">Toutes gravités</option>${severities.map((severity) => `<option value="${severity}">${severity}</option>`).join("")}`;
   actorSelect.innerHTML = `<option value="">Tous les acteurs</option>${actors.map((actor) => `<option value="${actor}">${actor}</option>`).join("")}`;
   typeSelect.value = currentType;
   severitySelect.value = currentSeverity;
@@ -1329,7 +1347,7 @@ function renderAudit() {
   const table = document.querySelector("#auditTable");
   if (!table) return;
   if (!can("viewAudit")) {
-    table.innerHTML = `<tr><td colspan="7">Acces reserve aux validateurs et admins.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="7">Accès réservé aux validateurs et admins.</td></tr>`;
     return;
   }
   renderAuditFilters();
@@ -1362,14 +1380,14 @@ function updateEstimate() {
   const endDate = document.querySelector("#endDate").value;
   if (!template || !startDate || !endDate) return;
   const cost = quantity * hoursBetween(startDate, endDate) * template.hourlyCostChf;
-  document.querySelector("#requestEstimate").textContent = `Cout estime : ${formatCost(cost)}`;
+  document.querySelector("#requestEstimate").textContent = `Coût estimé : ${formatCost(cost)}`;
 }
 
 function createRequest(event) {
   event.preventDefault();
   const user = currentUser();
   if (!user) {
-    alert("Vous devez etre connecte.");
+    alert("Vous devez être connecté.");
     return;
   }
   const template = byId(state.templates, document.querySelector("#templateId").value);
@@ -1378,8 +1396,8 @@ function createRequest(event) {
   const quantity = Number(document.querySelector("#quantity").value);
   const maxQuantity = can("createGroupRequest", user) ? 20 : 1;
   if (quantity > maxQuantity) {
-    alert("Action non autorisee pour votre role.");
-    addEvent("permission_denied", `Quantite ${quantity} refusee pour le role ${user.role}.`, {
+    alert("Action non autorisée pour votre rôle.");
+    addEvent("permission_denied", `Quantité ${quantity} refusée pour le rôle ${user.role}.`, {
       severity: "warning",
       targetType: "request-quantity",
       targetId: quantity
@@ -1390,7 +1408,7 @@ function createRequest(event) {
   }
   if (quantity > 1 && !requirePermission("createGroupRequest")) return;
   if (new Date(endDate) <= new Date(startDate)) {
-    alert("La date de fin doit etre apres la date de debut.");
+    alert("La date de fin doit être après la date de début.");
     return;
   }
   const request = {
@@ -1412,7 +1430,7 @@ function createRequest(event) {
     destroyedAt: null
   };
   state.requests.push(request);
-  addEvent("request_created", `Nouvelle demande #${request.id} enregistree pour validation.`, {
+  addEvent("request_created", `Nouvelle demande #${request.id} enregistrée pour validation.`, {
     severity: "success",
     targetType: "request",
     targetId: request.id,
@@ -1431,8 +1449,8 @@ function approveRequest(id) {
   const request = byId(state.requests, id);
   if (!transitionEntity(request, "approved", "approvedAt")) return;
   request.validatorId = currentUser().id;
-  request.decisionComment = "Demande approuvee.";
-  addEvent("request_approved", `Demande #${request.id} approuvee. Provisioning pret a demarrer.`, {
+  request.decisionComment = "Demande approuvée.";
+  addEvent("request_approved", `Demande #${request.id} approuvée. Provisionnement prêt à démarrer.`, {
     severity: "success",
     targetType: "request",
     targetId: request.id,
@@ -1447,8 +1465,8 @@ function refuseRequest(id) {
   const request = byId(state.requests, id);
   if (!transitionEntity(request, "refused", null)) return;
   request.validatorId = currentUser().id;
-  request.decisionComment = "Demande refusee.";
-  addEvent("request_refused", `Demande #${request.id} refusee.`, {
+  request.decisionComment = "Demande refusée.";
+  addEvent("request_refused", `Demande #${request.id} refusée.`, {
     severity: "warning",
     targetType: "request",
     targetId: request.id,
@@ -1462,11 +1480,11 @@ function provisionRequest(requestId) {
   if (!requirePermission("provisionVm")) return;
   const request = requestId ? byId(state.requests, requestId) : state.requests.find((item) => item.status === "approved");
   if (!request) {
-    alert("Aucune demande approuvee a provisionner.");
+    alert("Aucune demande approuvée à provisionner.");
     return;
   }
   if (request.status !== "approved") {
-    alert(`La demande #${request.id} n'est pas en statut approved.`);
+    alert(`La demande #${request.id} n'est pas en statut approuvé.`);
     return;
   }
   const owner = ownerForRequest(request);
@@ -1479,7 +1497,7 @@ function provisionRequest(requestId) {
   const requestedQuantity = Number(request.quantity || 1);
   const targetQuantity = Math.min(requestedQuantity, 50);
   if (requestedQuantity > 50) {
-    console.warn(`Demande #${request.id}: ${requestedQuantity} VM demandees, simulation limitee a 50 VM.`);
+    console.warn(`Demande #${request.id}: ${requestedQuantity} VM demandées, simulation limitée à 50 VM.`);
   }
   const now = nowDate();
   const startFloor = toDate(request.startDate);
@@ -1500,7 +1518,7 @@ function provisionRequest(requestId) {
       sshUser: "student",
       sshKey: `SHA256:lab-${slug}`,
       network,
-      // Decalage volontaire pour eviter un cout reel a 0 CHF sur une VM tout juste provisionnee, plus realiste en demo.
+      // Décalage volontaire pour éviter un coût réel à 0 CHF sur une VM tout juste provisionnée, plus réaliste en démo.
       createdAt: formatIsoLocal(demoCreatedAt),
       provisionedAt: null,
       startDate: request.startDate,
@@ -1516,8 +1534,8 @@ function provisionRequest(requestId) {
   transitionEntity(request, "active", null);
   request.provisionedAt = formatIsoLocal(demoProvisionedAt);
   refreshLifecycleStatuses();
-  const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitee a ${targetQuantity}/${requestedQuantity} pour la demo.` : "";
-  addEvent("vm_provisioned", `${createdVms.length}/${targetQuantity} VM provisionnee(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`, {
+  const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitée à ${targetQuantity}/${requestedQuantity} pour la démo.` : "";
+  addEvent("vm_provisioned", `${createdVms.length}/${targetQuantity} VM provisionnée(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`, {
     severity: "success",
     targetType: "request",
     targetId: request.id,
@@ -1535,14 +1553,14 @@ function destroyExpiredVms() {
   if (!requirePermission("destroyExpiredVms")) return;
   const expired = state.vms.filter((vm) => vm.status === "expired");
   if (expired.length === 0) {
-    alert("Aucune VM expiree a detruire.");
+    alert("Aucune VM expirée à détruire.");
     return;
   }
   expired.forEach((vm) => {
     transitionEntity(vm, "destroyed", "destroyedAt");
     const request = byId(state.requests, vm.requestId);
     if (request && canTransition(request.status, "destroyed")) transitionEntity(request, "destroyed", "destroyedAt");
-    addEvent("vm_destroyed", `VM ${vm.name} detruite apres expiration. Cout reel: ${formatCost(realVmCost(vm))}.`, {
+    addEvent("vm_destroyed", `VM ${vm.name} détruite après expiration. Coût réel: ${formatCost(realVmCost(vm))}.`, {
       severity: "danger",
       targetType: "vm",
       targetId: vm.id,

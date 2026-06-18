@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cloud Lab Control Center</title>
+  <title>Centre de contrôle Cloud Lab</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffffff'/%3E%3Cpath d='M13 15h11v34H13z' fill='%23e63329'/%3E%3Cpath d='M27 10h11v39H27z' fill='%23f06b2f'/%3E%3Cpath d='M41 15l10-6v40H41z' fill='%23f5b700'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,15 +21,15 @@
     </div>
     <nav aria-label="Navigation principale">
       <button class="nav-item active" data-view="dashboard">Vue d'ensemble</button>
-      <button class="nav-item" data-view="catalog">Templates de cours</button>
+      <button class="nav-item" data-view="catalog">Cours</button>
       <button class="nav-item" data-view="request">Nouvelle demande</button>
-      <button class="nav-item" data-view="validation">Demandes a valider</button>
+      <button class="nav-item" data-view="validation">Demandes à valider</button>
       <button class="nav-item" data-view="vms">Parc VM</button>
       <button class="nav-item" data-view="audit">Journal d'audit</button>
     </nav>
     <div class="sidebar-note">
       <strong>Session pilote</strong>
-      <span>Tout est pret pour rejouer le parcours de demo sans dependance externe.</span>
+      <span>Tout est prêt pour rejouer le parcours de démo sans dépendance externe.</span>
     </div>
   </aside>
 
@@ -37,23 +38,23 @@
       <div>
         <div class="eyebrow">Geneva Institute of Technology - Infomaniak Public Cloud - OpenStack</div>
         <h1>Ravi de vous revoir</h1>
-        <p>Voici l'etat des environnements de cours, des couts et des machines proches de leur fin de vie.</p>
+        <p>Suivez les environnements de cours, les coûts et les machines proches de leur échéance.</p>
       </div>
       <div class="user-chip">
         <div class="avatar" id="currentUserInitials" aria-hidden="true"><span>A</span></div>
         <div>
           <strong id="currentUserName">Administrateur Lab</strong>
-          <small id="currentUserRole">Pilotage cloud academique</small>
+          <small id="currentUserRole">Pilotage cloud académique</small>
           <span class="role-badge role-admin" id="currentUserBadge">Admin</span>
         </div>
-        <button class="ghost-button chip-logout" id="logoutButton" type="button">Se deconnecter</button>
+        <button class="ghost-button chip-logout" id="logoutButton" type="button">Se déconnecter</button>
       </div>
     </header>
 
     <section class="ops-strip" aria-label="Etat operationnel">
       <div class="ops-item">
         <span>Environnement</span>
-        <strong>Pilote pret</strong>
+        <strong>Pilote prêt</strong>
       </div>
       <div class="ops-item">
         <span>Cloud</span>
@@ -64,7 +65,7 @@
         <strong>Demande -> VM -> fin de vie</strong>
       </div>
       <div class="ops-item">
-        <span>Regle cle</span>
+        <span>Règle clé</span>
         <strong>Aucune VM sans date de fin</strong>
       </div>
     </section>
@@ -74,16 +75,21 @@
         <div class="login-brand">
           <span class="brand-mark">GIT</span>
           <strong>Cloud Lab</strong>
-          <p>Connexion securisee via votre compte institutionnel</p>
+          <p>Connexion sécurisée via votre compte institutionnel</p>
         </div>
-        <div class="login-actions" aria-label="Choix du compte de demonstration">
+        <div class="login-actions" aria-label="Choix du compte de démonstration">
           <button class="primary-button microsoft-button" id="mockMicrosoftLoginButton" type="button">
-            <span class="ms-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <svg class="microsoft-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false">
+              <rect x="1" y="1" width="9" height="9" rx="1.5" fill="#f25022"></rect>
+              <rect x="12" y="1" width="9" height="9" rx="1.5" fill="#7fba00"></rect>
+              <rect x="1" y="12" width="9" height="9" rx="1.5" fill="#00a4ef"></rect>
+              <rect x="12" y="12" width="9" height="9" rx="1.5" fill="#ffb900"></rect>
+            </svg>
             Se connecter avec Microsoft 365
           </button>
           <div class="mock-user-list" id="mockLoginUsers"></div>
           <select id="mockLoginUser" hidden aria-hidden="true"></select>
-          <p>Authentification simulee pour la demo. Integration Entra ID prevue en phase suivante.</p>
+          <p>Authentification simulée pour la démonstration. L’intégration Entra ID réelle est prévue en phase suivante.</p>
         </div>
       </div>
     </section>
@@ -92,27 +98,27 @@
       <div class="section-head">
         <div>
           <h2>Ce qui demande votre attention</h2>
-          <p>Les demandes, les couts et les alertes importantes sont regroupes ici.</p>
+          <p>Les demandes, les coûts et les alertes importantes sont regroupés ici.</p>
         </div>
         <div class="quick-actions">
           <span>Actions rapides</span>
           <div class="actions">
             <button class="ghost-button" id="exportRequestsButton">Demandes CSV</button>
             <button class="ghost-button" id="exportVmsButton">VM CSV</button>
-            <button class="ghost-button" id="resetDataButton">Reinitialiser</button>
+            <button class="ghost-button" id="resetDataButton">Réinitialiser</button>
           </div>
         </div>
       </div>
       <div class="kpi-grid" id="kpiGrid"></div>
       <section class="panel live-flow">
-          <h3>Parcours suivi pendant la demo</h3>
+          <h3>Parcours suivi pendant la démo</h3>
         <div class="flow-steps">
-          <div><span>1</span><strong>Demande</strong><small>besoin + echeance</small></div>
-          <div><span>2</span><strong>Validation</strong><small>decision rapide</small></div>
-          <div><span>3</span><strong>Provisioning</strong><small>creation cloud</small></div>
-          <div><span>4</span><strong>Configuration</strong><small>outils prets</small></div>
-          <div><span>5</span><strong>Monitoring</strong><small>suivi et couts</small></div>
-          <div><span>6</span><strong>Fin de vie</strong><small>nettoyage maitrise</small></div>
+          <div><span>1</span><strong>Demande</strong><small>besoin + échéance</small></div>
+          <div><span>2</span><strong>Validation</strong><small>décision rapide</small></div>
+          <div><span>3</span><strong>Provisionnement</strong><small>création cloud</small></div>
+          <div><span>4</span><strong>Configuration</strong><small>outils prêts</small></div>
+          <div><span>5</span><strong>Supervision</strong><small>suivi et coûts</small></div>
+          <div><span>6</span><strong>Fin de vie</strong><small>nettoyage maîtrisé</small></div>
         </div>
       </section>
       <div class="grid-two">
@@ -127,7 +133,7 @@
       </div>
       <div class="grid-two">
         <section class="panel">
-          <h3>Etat du cycle</h3>
+          <h3>État du cycle</h3>
           <div id="lifecycleList" class="list"></div>
         </section>
         <section class="panel">
@@ -137,8 +143,8 @@
       </div>
       <section class="panel data-proof">
         <div>
-          <h3>Garanties data pour la revue</h3>
-          <p>Ces controles prouvent que le prototype suit les regles metier: dates de fin, couts, transitions et nettoyage.</p>
+          <h3>Garanties données pour la revue</h3>
+          <p>Ces contrôles prouvent que le prototype suit les règles métier : dates de fin, coûts, transitions et nettoyage.</p>
         </div>
         <div id="dataControlsList" class="proof-grid"></div>
       </section>
@@ -147,8 +153,8 @@
     <section class="view" id="view-catalog">
       <div class="section-head">
         <div>
-          <h2>Templates prets pour les cours</h2>
-          <p>Chaque template porte son flavor, son image, ses outils et son cout horaire.</p>
+          <h2>Catalogue des cours</h2>
+          <p>Choisissez un environnement prêt à lancer pour un module ou un atelier.</p>
         </div>
       </div>
       <div class="template-grid" id="templateGrid"></div>
@@ -157,8 +163,8 @@
     <section class="view" id="view-request">
       <div class="section-head">
         <div>
-          <h2>Preparer un nouvel environnement</h2>
-          <p>Choisissez le cours, la duree et le volume de machines necessaire.</p>
+          <h2>Préparer un nouvel environnement</h2>
+          <p>Choisissez le cours, la durée et le volume de machines nécessaire.</p>
         </div>
       </div>
       <form class="panel form-panel" id="requestForm">
@@ -168,15 +174,15 @@
             <select id="requesterId" required></select>
           </label>
           <label>
-            Template
+            Modèle
             <select id="templateId" required></select>
           </label>
           <label>
-            Quantite
+            Quantité
             <input type="number" id="quantity" min="1" max="20" value="1" required>
           </label>
           <label>
-            Date de debut
+            Date de début
             <input type="date" id="startDate" required>
           </label>
           <label>
@@ -185,19 +191,19 @@
           </label>
           <label class="wide">
             Raison de la demande
-            <textarea id="requestReason" rows="3" placeholder="Ex: TP Linux, projet web, lab data..." required></textarea>
+            <textarea id="requestReason" rows="3" placeholder="Ex. : TP Linux, projet web, atelier données..." required></textarea>
           </label>
         </div>
-        <div class="estimate" id="requestEstimate">Cout estime : -</div>
-        <button class="primary-button" type="submit">Creer la demande</button>
+        <div class="estimate" id="requestEstimate">Coût estimé : -</div>
+        <button class="primary-button" type="submit">Créer la demande</button>
       </form>
     </section>
 
     <section class="view" id="view-validation">
       <div class="section-head">
         <div>
-          <h2>Demandes a valider</h2>
-          <p>Decidez avec le cout estime et l'echeance sous les yeux.</p>
+          <h2>Demandes à valider</h2>
+          <p>Décidez avec le coût estimé et l’échéance sous les yeux.</p>
         </div>
       </div>
       <section class="panel">
@@ -208,10 +214,10 @@
                 <th>ID</th>
                 <th>Demandeur</th>
                 <th>Cours</th>
-                <th>Template</th>
-                <th>Quantite</th>
+                <th>Modèle</th>
+                <th>Quantité</th>
                 <th>Dates</th>
-                <th>Cout estime</th>
+                <th>Coût estimé</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -226,11 +232,11 @@
       <div class="section-head">
         <div>
           <h2>Parc des machines virtuelles</h2>
-          <p>Retrouvez les machines provisionnees, leur statut, leur reseau et leur date de fin.</p>
+          <p>Retrouvez les machines provisionnées, leur statut, leur réseau et leur date de fin.</p>
         </div>
         <div class="actions">
-          <button class="ghost-button" id="simulateProvisionButton">Provisionner demande approuvee</button>
-          <button class="ghost-button" id="destroyExpiredButton">Detruire VM expirees</button>
+          <button class="ghost-button" id="simulateProvisionButton">Provisionner une demande approuvée</button>
+          <button class="ghost-button" id="destroyExpiredButton">Marquer les VM expirées comme détruites</button>
         </div>
       </div>
       <section class="panel">
@@ -242,10 +248,10 @@
                 <th>Proprietaire</th>
                 <th>IP</th>
                 <th>Statut</th>
-                <th>Reseau</th>
+                <th>Réseau</th>
                 <th>Fin</th>
-                <th>Cout reel</th>
-                <th>Cout/h</th>
+                <th>Coût réel</th>
+                <th>Coût/h</th>
               </tr>
             </thead>
             <tbody id="vmsTable"></tbody>
@@ -258,11 +264,11 @@
       <div class="section-head">
         <div>
           <h2>Journal d'audit</h2>
-          <p>Historique complet des actions, acteurs, roles et tentatives refusees.</p>
+          <p>Historique complet des actions, acteurs, rôles et tentatives refusées.</p>
         </div>
         <div class="actions audit-filters">
           <select id="auditTypeFilter" aria-label="Filtrer par type"></select>
-          <select id="auditSeverityFilter" aria-label="Filtrer par gravite"></select>
+          <select id="auditSeverityFilter" aria-label="Filtrer par gravité"></select>
           <select id="auditActorFilter" aria-label="Filtrer par acteur"></select>
         </div>
       </div>
@@ -273,8 +279,8 @@
               <tr>
                 <th>Date</th>
                 <th>Acteur</th>
-                <th>Role</th>
-                <th>Gravite</th>
+                <th>Rôle</th>
+                <th>Gravité</th>
                 <th>Type</th>
                 <th>Cible</th>
                 <th>Detail</th>
