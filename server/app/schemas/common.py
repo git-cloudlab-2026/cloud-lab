@@ -30,6 +30,17 @@ class UserCreate(BaseModel):
     class_name: str | None = Field(default=None, max_length=80)
 
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=120)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserRead
+
+
 class CourseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -82,6 +93,10 @@ class VmRequestPatch(BaseModel):
             if not self.validator_id or not self.decision_comment:
                 raise ValueError("validator_id et decision_comment sont obligatoires pour approuver ou refuser.")
         return self
+
+
+class VmRequestReject(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
 
 
 class VmRequestRead(BaseModel):

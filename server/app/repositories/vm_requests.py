@@ -9,7 +9,7 @@ from app.repositories.base import Repository
 class VmRequestRepository(Repository[VmRequest]):
     model = VmRequest
 
-    async def list_filtered(self, status: RequestStatus | None = None) -> list[VmRequest]:
+    async def list_filtered(self, status: RequestStatus | None = None, requester_id: int | None = None) -> list[VmRequest]:
         stmt = (
             select(VmRequest)
             .options(selectinload(VmRequest.requester), selectinload(VmRequest.course), selectinload(VmRequest.template))
@@ -17,5 +17,7 @@ class VmRequestRepository(Repository[VmRequest]):
         )
         if status:
             stmt = stmt.where(VmRequest.status == status)
+        if requester_id:
+            stmt = stmt.where(VmRequest.requester_id == requester_id)
         result = await self.session.execute(stmt)
         return list(result.scalars())

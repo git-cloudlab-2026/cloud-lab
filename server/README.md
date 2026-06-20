@@ -109,6 +109,32 @@ Connexion de developpement :
 POST /api/v1/auth/mock-login/1
 ```
 
+Connexion JWT locale pour tester l'API sans navigateur ni Entra ID :
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@giptech.ch",
+  "password": "admin123"
+}
+```
+
+Comptes disponibles en `AUTH_MODE=mock` :
+
+| Email | Mot de passe | Role |
+|---|---|---|
+| `admin@giptech.ch` | `admin123` | `admin` |
+| `prof@giptech.ch` | `prof123` | `teacher` |
+| `etudiant1@giptech.ch` | `etu123` | `student` |
+
+Le token retourne doit ensuite etre envoye avec :
+
+```http
+Authorization: Bearer <token>
+```
+
 Session courante :
 
 ```http
@@ -234,7 +260,21 @@ Important : le backend ne donne pas automatiquement un role sensible a un utilis
 
 ## Integration future provisioning
 
-Le backend ne cree aucune VM lui-meme.
+Le backend ne cree aucune VM reelle lui-meme.
+
+En developpement, `MockTerraformService` simule OpenTofu/Terraform pour tester le
+workflow de bout en bout sans acces Infomaniak OpenStack. Il retourne un id
+provider fictif, une IP privee, un nom de VM, un segment reseau et un fingerprint
+SSH coherents.
+
+Routes de demonstration locale :
+
+```http
+POST /api/v1/vm-requests/{id}/approve
+POST /api/v1/vm-requests/{id}/reject
+POST /api/v1/virtual-machines/{id}/destroy
+GET  /api/v1/virtual-machines/expired
+```
 
 Il prepare seulement le contrat que la partie Terraform/OpenTofu de Josue utilisera :
 

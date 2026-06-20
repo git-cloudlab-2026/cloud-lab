@@ -101,6 +101,35 @@ Le backend supporte un mode de developpement `AUTH_MODE=mock`.
 
 L'integration OIDC Microsoft Entra ID reelle est preparee au niveau configuration.
 
+En attendant les acces Microsoft Entra ID du GIT, le backend expose aussi une
+authentification JWT locale pour tester l'API comme un vrai client externe.
+
+Comptes JWT de demonstration :
+
+| Email | Mot de passe | Role |
+|---|---|---|
+| `admin@giptech.ch` | `admin123` | `admin` |
+| `prof@giptech.ch` | `prof123` | `teacher` |
+| `etudiant1@giptech.ch` | `etu123` | `student` |
+
+Exemple :
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@giptech.ch",
+  "password": "admin123"
+}
+```
+
+La reponse contient un `access_token` JWT a envoyer ensuite avec :
+
+```http
+Authorization: Bearer <token>
+```
+
 Mapping prevu :
 
 ```text
@@ -113,7 +142,25 @@ Les etudiants peuvent etre crees automatiquement au premier login si leur groupe
 
 Le backend ne lance aucune commande Terraform, OpenTofu, SSH ou Ansible.
 
-Il expose des endpoints propres pour que la partie infra puisse s'integrer ensuite :
+Pour travailler sans acces OpenStack, il contient un `MockTerraformService` qui
+simule la creation/destruction et retourne des donnees realistes :
+
+- id provider mock;
+- nom de VM;
+- adresse IP privee;
+- segment reseau;
+- fingerprint SSH.
+
+Routes utiles pour tester le cycle complet :
+
+- `POST /api/v1/vm-requests/{id}/approve` : approuve et provisionne en mock;
+- `POST /api/v1/vm-requests/{id}/reject` : refuse une demande;
+- `GET /api/v1/virtual-machines/{id}` : detail d'une VM visible par l'utilisateur;
+- `POST /api/v1/virtual-machines/{id}/destroy` : destruction mock + audit + notification;
+- `GET /api/v1/virtual-machines/expired` : VMs expirees a traiter.
+
+Il expose aussi des endpoints propres pour que la partie infra reelle puisse
+s'integrer ensuite :
 
 - `POST /api/v1/vm-requests/{id}/provision`
 - `PATCH /api/v1/virtual-machines/{id}/provisioning-result`

@@ -15,6 +15,11 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@localhost:5432/cloud_lab"
     )
     session_secret: str = "dev-only-change-me"
+    jwt_secret: str = "dev-only-jwt-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_hours: int = 8
+    mock_terraform_create_delay_seconds: float = 0.2
+    mock_terraform_destroy_delay_seconds: float = 0.1
     cors_origins: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:5173", "null"]
 
     azure_tenant_id: str | None = None

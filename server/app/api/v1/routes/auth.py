@@ -6,14 +6,61 @@ from starlette.responses import RedirectResponse
 
 from app.core.config import get_settings
 from app.core.errors import ApiError
-from app.core.security import get_current_user
+from app.core.security import create_access_token, get_current_user
 from app.db.session import get_session
+from app.domain.enums import UserRole
 from app.domain.models import User
-from app.schemas.common import UserRead
+from app.repositories.users import UserRepository
+from app.schemas.common import TokenResponse, UserLogin, UserRead
 from app.services.auth_service import AuthService
 from app.services.oidc_service import EntraOidcService
 
 router = APIRouter()
+
+DEMO_JWT_USERS = {
+    "prof@giptech.ch": {"password": "prof123", "full_name": "M. Dupont", "role": UserRole.teacher, "class_name": None},
+    "etudiant1@giptech.ch": {"password": "etu123", "full_name": "Alice Martin", "role": UserRole.student, "class_name": "E1"},
+    "admin@giptech.ch": {"password": "admin123", "full_name": "Admin System", "role": UserRole.admin, "class_name": None},
+}
+
+
+async def find_or_create_demo_user(session: AsyncSession, payload: UserLogin) -> User:
+    demo_user = DEMO_JWT_USERS.get(payload.email.lower())
+    if not demo_user or payload.password != demo_user["password"]:
+        raise ApiError(401, "invalid_credentials", "Email ou mot de passe incorrect.")
+
+    users = UserRepository(session)
+    user = await users.get_by_email(payload.email.lower())
+    if user:
+        return user
+
+    user = User(
+        full_name=demo_user["full_name"],
+        email=payload.email.lower(),
+        role=demo_user["role"],
+        class_name=demo_user["class_name"],
+        is_active=True,
+    )
+    users.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+@router.post("/login", response_model=TokenResponse)
+async def jwt_login(payload: UserLogin, request: Request, session: AsyncSession = Depends(get_session)):
+    settings = get_settings()
+    if settings.auth_mode != "mock":
+        raise ApiError(403, "local_jwt_disabled", "Le login JWT local est disponible uniquement en AUTH_MODE=mock.")
+
+    user = await find_or_create_demo_user(session, payload)
+    token = create_access_token(user.id, user.email, user.role.value)
+
+    request.session.clear()
+    request.session["user_id"] = user.id
+    request.session["auth_mode"] = "jwt-mock"
+
+    return TokenResponse(access_token=token, user=UserRead.model_validate(user))
 
 
 @router.post("/mock-login/{user_id}", response_model=dict)

@@ -8,10 +8,12 @@ from app.repositories.base import Repository
 class VirtualMachineRepository(Repository[VirtualMachine]):
     model = VirtualMachine
 
-    async def list_filtered(self, status: VmStatus | None = None) -> list[VirtualMachine]:
+    async def list_filtered(self, status: VmStatus | None = None, owner_id: int | None = None) -> list[VirtualMachine]:
         stmt = select(VirtualMachine).order_by(VirtualMachine.created_at.desc())
         if status:
             stmt = stmt.where(VirtualMachine.status == status)
+        if owner_id:
+            stmt = stmt.where(VirtualMachine.owner_id == owner_id)
         result = await self.session.execute(stmt)
         return list(result.scalars())
 

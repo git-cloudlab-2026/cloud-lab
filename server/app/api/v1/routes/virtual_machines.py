@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user, require_roles
 from app.db.session import get_session
-from app.domain.enums import VmStatus
+from app.domain.enums import UserRole, VmStatus
 from app.domain.models import User
 from app.repositories.vms import VirtualMachineRepository, VmMetricRepository
 from app.schemas.common import (
@@ -20,9 +20,29 @@ router = APIRouter()
 
 
 @router.get("", response_model=dict)
-async def list_vms(status: VmStatus | None = None, session: AsyncSession = Depends(get_session), _user=Depends(get_current_user)):
-    rows = await VirtualMachineRepository(session).list_filtered(status=status)
+async def list_vms(status: VmStatus | None = None, session: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+    owner_id = user.id if user.role == UserRole.student else None
+    rows = await VirtualMachineRepository(session).list_filtered(status=status, owner_id=owner_id)
     return {"data": [VirtualMachineRead.model_validate(row) for row in rows]}
+
+
+@router.get("/expired", response_model=dict)
+async def list_expired_vms(session: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+    owner_id = user.id if user.role == UserRole.student else None
+    rows = await VirtualMachineRepository(session).list_filtered(status=VmStatus.expired, owner_id=owner_id)
+    return {"data": [VirtualMachineRead.model_validate(row) for row in rows]}
+
+
+@router.get("/{vm_id}", response_model=dict)
+async def get_vm(vm_id: int, session: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+    row = await VirtualMachineService(session).get_visible_vm(vm_id, user)
+    return {"data": VirtualMachineRead.model_validate(row)}
+
+
+@router.post("/{vm_id}/destroy", response_model=dict)
+async def destroy_vm(vm_id: int, session: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+    row = await VirtualMachineService(session).destroy_with_mock(vm_id, user)
+    return {"data": VirtualMachineRead.model_validate(row)}
 
 
 @router.patch("/{vm_id}", response_model=dict)
