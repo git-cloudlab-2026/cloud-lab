@@ -8,32 +8,44 @@ openrc.sh
 *.key
 id_rsa
 id_ed25519
+*.p12
+*.pfx
 
 # Terraform / OpenTofu
-.terraform/
+**/.terraform/
+.terraform.lock.hcl.bak
 *.tfstate
 *.tfstate.*
 *.tfvars
+!*.tfvars.example
 crash.log
 crash.*.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+.terraformrc
+terraform.rc
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 .venv/
 venv/
 env/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
 
 # Node
 node_modules/
 dist/
 build/
 .next/
+coverage/
 
 # Databases
 *.db
@@ -45,8 +57,14 @@ build/
 Thumbs.db
 .vscode/
 !.vscode/extensions.json
+.idea/
+*.swp
 
 # Logs
 *.log
 logs/
 
+# Local browser/test artifacts
+.tmp-chrome/
+playwright-report/
+test-results/

@@ -1,74 +1,131 @@
-# Cloud Lab Control Center
+# Cloud Lab
 
-Projet hackathon juin 2026 - Geneva Institute of Technology x Satom IT.
+Plateforme de gestion de VMs educatives pour le Geneva Institute of Technology.
 
-## Objectif
-
-Construire une plateforme de gestion du cycle de vie des VM de cours :
+Cloud Lab permet a un etudiant ou a un formateur de demander une VM temporaire, de faire valider cette demande, de provisionner l'environnement sur Infomaniak Public Cloud, de suivre les couts et de nettoyer automatiquement les machines arrivees a echeance.
 
 ```text
 Demande -> Validation -> Provisioning -> Configuration -> Monitoring -> Fin de vie
 ```
 
-Le portail permet a un etudiant ou un formateur de demander une VM, de faire valider la demande, puis de suivre la machine, son statut, son cout et sa date de fin.
+## Fonctionnalites principales
 
-## Etat actuel du depot
+- portail web pour demander une ou plusieurs VMs de cours;
+- catalogue de templates : Linux admin, developpement web, data science, securite;
+- workflow de validation/refus avec roles;
+- authentification JWT locale pour le developpement;
+- integration Microsoft Entra ID / OIDC preparee pour la production;
+- API FastAPI versionnee `/api/v1`;
+- base PostgreSQL en production et via Docker Compose en developpement;
+- couche data : demandes, VMs, couts, metriques, audit, notifications;
+- scheduler de fin de vie pour marquer les VMs expirees;
+- MockTerraformService pour tester sans acces OpenStack;
+- Terraform/OpenTofu pour Infomaniak OpenStack;
+- Ansible pour le durcissement SSH et la configuration initiale;
+- documentation OpenAPI/Swagger automatique.
 
-Ce depot contient la partie deja avancee par Auguy :
+## Architecture
 
-- portail front-end statique dans `app/`;
-- couche data documentee dans `data/`;
-- backend FastAPI + PostgreSQL dans `server/`;
-- schema SQL, seed data, migrations Alembic;
-- API REST versionnee `/api/v1`;
-- workflow demande, validation, provisioning intent, fin de vie;
-- dashboard, couts, alertes, notifications, audit;
-- auth OIDC/Entra ID avec mapping groupes vers roles;
-- 5 classes E1 a E5 avec 25 eleves par classe dans le seed backend;
-- points d'integration prepares pour Terraform/OpenTofu et monitoring.
-
-Les parties Terraform/OpenTofu, reseau/securite et Ansible restent separees pour eviter de melanger les responsabilites.
-
-## Repartition actuelle
-
-| Personne | Perimetre |
-|---|---|
-| Auguy | Portail, data, backend API, dashboard, couts, audit, notifications |
-| Josue | Terraform/OpenTofu, creation et destruction reelle des VM |
-| Lorenzo | Reseau, securite, SSH, isolation OpenStack |
-
-Rayan n'est plus dans le perimetre actif du projet.
-
-## Structure
-
-```text
-app/                 Front-end statique HTML/CSS/JS
-data/                Schema SQL de reference, seed et requetes dashboard
-server/              Backend FastAPI + PostgreSQL
-docker-compose.yml   PostgreSQL + API pour le dev local
-.env.example         Variables d'environnement sans secret
-.gitignore           Fichiers exclus du depot
+```mermaid
+flowchart LR
+  U["Etudiant / Formateur"] --> F["Frontend web\n(portail statique actuel, React-ready)"]
+  F --> A["API FastAPI\n/api/v1"]
+  A --> DB["PostgreSQL\nusers, requests, VMs, costs, audit"]
+  A --> AUTH["JWT dev\nOIDC Entra ID prod"]
+  A --> S["Scheduler\nexpiration VMs"]
+  A --> M["MockTerraformService\ndemo sans infra"]
+  A --> P["Provisioner futur"]
+  P --> T["Terraform / OpenTofu"]
+  T --> O["Infomaniak Public Cloud\nOpenStack"]
+  O --> VM["VMs Ubuntu"]
+  VM --> AN["Ansible\nSSH hardening"]
 ```
 
-## Lancer le front-end
+## Prerequis
 
-Le portail statique peut etre ouvert directement :
+- Python 3.11 ou 3.12;
+- Docker Desktop et Docker Compose;
+- Terraform ou OpenTofu 1.5+;
+- Git;
+- Node.js 18+ si le frontend evolue vers React;
+- acces Infomaniak Public Cloud pour le provisioning reel;
+- une cle SSH publique locale, par exemple `~/.ssh/id_ed25519.pub`.
+
+## Structure du projet
 
 ```text
-app/index.html
+app/                       Portail web HTML/CSS/JS
+server/                    Backend FastAPI, SQLAlchemy, Alembic
+data/                      Schema SQL de reference, seed, requetes dashboard
+infrastructure/            Terraform/OpenTofu Infomaniak OpenStack
+ansible/                   Playbook et role SSH hardening
+docs/                      Documentation technique
+.github/workflows/ci.yml   Pipeline CI GitHub Actions
+docker-compose.yml         PostgreSQL + API locale
+.env.example               Exemple de configuration sans secret
+Makefile                   Commandes utiles
+README.md                  Documentation principale
 ```
 
-## Lancer le backend FastAPI
+## Configuration
 
-Avec Docker :
+Copier le fichier d'exemple :
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Adapter ensuite `.env` localement. Ne jamais commit `.env`.
+
+Variables importantes :
+
+```text
+AUTH_MODE=mock
+DATABASE_URL=postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@localhost:5432/cloud_lab
+JWT_SECRET=change-me
+SESSION_SECRET=change-me
+AZURE_TENANT_ID=...
+AZURE_CLIENT_ID=...
+AZURE_CLIENT_SECRET=...
+AZURE_REDIRECT_URI=http://localhost:8000/api/v1/auth/callback
+```
+
+En production :
+
+```text
+ENVIRONMENT=production
+AUTH_MODE=oidc
+```
+
+## Installation locale avec Docker
+
+Commande recommandee pour tester tout le backend :
 
 ```powershell
 docker compose up --build
 ```
 
-En local :
+Le conteneur backend lance :
 
-> Utiliser Python 3.12. Python 3.14 peut poser probleme avec certaines dependances PostgreSQL.
+1. les migrations Alembic;
+2. le seed de donnees demo;
+3. FastAPI sur le port `8000`.
+
+URLs utiles :
+
+```text
+Portail web      http://localhost:8000/portal/
+Swagger OpenAPI  http://localhost:8000/docs
+Healthcheck      http://localhost:8000/health
+```
+
+Arret :
+
+```powershell
+docker compose down
+```
+
+## Installation locale sans Docker
 
 ```powershell
 cd server
@@ -80,37 +137,33 @@ python -m scripts.seed
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Documentation API :
+## Commandes Make
 
-```text
-http://localhost:8000/docs
+Si `make` est disponible :
+
+```powershell
+make up
+make logs
+make migrate
+make seed
+make test
+make infra-init
+make infra-plan
 ```
 
-Portail web branche sur FastAPI :
+Sous Windows sans `make`, utiliser directement les commandes Docker, Python et Terraform indiquees dans ce README.
 
-```text
-http://localhost:8000/portal/
-```
+## Authentification
 
-Pour tester l'application avec sessions et cookies, utiliser cette URL plutot que
-`app/index.html` en `file://`.
+### Mode developpement : JWT local
 
-## Mode auth
-
-Le backend supporte un mode de developpement `AUTH_MODE=mock`.
-
-L'integration OIDC Microsoft Entra ID reelle est preparee au niveau configuration.
-
-En attendant les acces Microsoft Entra ID du GIT, le backend expose aussi une
-authentification JWT locale pour tester l'API comme un vrai client externe.
-
-Comptes JWT de demonstration :
+Comptes de demonstration :
 
 | Email | Mot de passe | Role |
 |---|---|---|
-| `admin@giptech.ch` | `admin123` | `admin` |
-| `prof@giptech.ch` | `prof123` | `teacher` |
-| `etudiant1@giptech.ch` | `etu123` | `student` |
+| `admin@giptech.ch` | `admin123` | admin |
+| `prof@giptech.ch` | `prof123` | teacher |
+| `etudiant1@giptech.ch` | `etu123` | student |
 
 Exemple :
 
@@ -124,10 +177,26 @@ Content-Type: application/json
 }
 ```
 
-La reponse contient un `access_token` JWT a envoyer ensuite avec :
+Puis envoyer :
 
 ```http
 Authorization: Bearer <token>
+```
+
+### Mode production : Microsoft Entra ID / OIDC
+
+Le mode OIDC est prepare mais depend des acces GIT :
+
+- Tenant ID;
+- Client ID;
+- Client Secret;
+- Redirect URI;
+- groupes Entra pour mapper les roles.
+
+Scopes prevus :
+
+```text
+openid profile email User.Read GroupMember.Read.All
 ```
 
 Mapping prevu :
@@ -136,42 +205,181 @@ Mapping prevu :
 Admin / Validateurs / Enseignants / E1 / E2 / E3 / E4 / E5
 ```
 
-Les etudiants peuvent etre crees automatiquement au premier login si leur groupe Entra indique leur classe. Les roles sensibles restent controles par la base applicative.
+## Deploiement infrastructure
 
-## Frontiere infrastructure
+Le dossier `infrastructure/` cree :
 
-Le backend ne lance aucune commande Terraform, OpenTofu, SSH ou Ansible.
+- reseau prive;
+- sous-reseau;
+- routeur;
+- security group SSH/ICMP;
+- paire de cles SSH;
+- VMs Ubuntu;
+- floating IPs optionnelles;
+- outputs : VM IDs, noms, IPs, commandes SSH.
 
-Pour travailler sans acces OpenStack, il contient un `MockTerraformService` qui
-simule la creation/destruction et retourne des donnees realistes :
+Configuration :
 
-- id provider mock;
-- nom de VM;
-- adresse IP privee;
-- segment reseau;
-- fingerprint SSH.
+```powershell
+cd infrastructure
+Copy-Item terraform.tfvars.example terraform.tfvars
+```
 
-Routes utiles pour tester le cycle complet :
+Remplir `terraform.tfvars` avec les valeurs Infomaniak/OpenStack :
 
-- `POST /api/v1/vm-requests/{id}/approve` : approuve et provisionne en mock;
-- `POST /api/v1/vm-requests/{id}/reject` : refuse une demande;
-- `GET /api/v1/virtual-machines/{id}` : detail d'une VM visible par l'utilisateur;
-- `POST /api/v1/virtual-machines/{id}/destroy` : destruction mock + audit + notification;
-- `GET /api/v1/virtual-machines/expired` : VMs expirees a traiter.
+```hcl
+auth_url            = "https://api.pub1.infomaniak.cloud/identity/v3"
+region              = "dc4-a"
+project_name        = "Projet-ALJ"
+username            = "PCU-XXXX"
+password            = "CHANGE_ME"
+external_network_id = "CHANGE_ME_EXTERNAL_NETWORK_ID"
+```
 
-Il expose aussi des endpoints propres pour que la partie infra reelle puisse
-s'integrer ensuite :
+Commandes :
 
-- `POST /api/v1/vm-requests/{id}/provision`
-- `PATCH /api/v1/virtual-machines/{id}/provisioning-result`
-- `PATCH /api/v1/virtual-machines/{id}/destruction-result`
+```powershell
+terraform init
+terraform fmt
+terraform validate
+terraform plan
+terraform apply
+terraform output
+```
+
+Destruction :
+
+```powershell
+terraform destroy
+```
+
+## Utilisation du workflow
+
+1. L'utilisateur se connecte au portail.
+2. Il choisit un template de VM et une date de fin.
+3. Une demande est creee avec un cout estime.
+4. Un validateur approuve ou refuse.
+5. En mode demo, `MockTerraformService` cree une VM simulee.
+6. En production, un provisioner externe appelle Terraform/OpenTofu.
+7. Le dashboard suit VMs, couts, alertes et audit.
+8. Le scheduler marque les VMs expirees.
+9. La destruction reelle est confirmee via l'API.
+
+## API Documentation
+
+Documentation interactive :
+
+```text
+http://localhost:8000/docs
+```
+
+Endpoints principaux :
+
+```http
+POST /api/v1/auth/login
+GET  /api/v1/auth/me
+GET  /api/v1/courses
+GET  /api/v1/vm-templates
+GET  /api/v1/vm-requests
+POST /api/v1/vm-requests
+POST /api/v1/vm-requests/{id}/approve
+POST /api/v1/vm-requests/{id}/reject
+GET  /api/v1/virtual-machines
+POST /api/v1/virtual-machines/{id}/metrics
+GET  /api/v1/dashboard/summary
+GET  /api/v1/audit-events
+GET  /api/v1/notifications
+```
+
+Voir aussi :
+
+```text
+docs/api.md
+```
+
+## CI/CD
+
+Le pipeline GitHub Actions `.github/workflows/ci.yml` verifie :
+
+- installation Python;
+- compilation backend;
+- tests backend;
+- format Terraform;
+- `terraform init -backend=false`;
+- `terraform validate`.
 
 ## Securite
 
-Ne jamais commit :
+- ne jamais commit `.env`, `terraform.tfvars`, `*.tfstate`, cle SSH privee ou `clouds.yaml`;
+- JWT signe avec secret configurable;
+- OIDC obligatoire en production;
+- roles applicatifs : student, teacher, validator, admin;
+- routes sensibles protegees par role;
+- 2FA a activer sur les comptes GitHub, Infomaniak et Microsoft;
+- SSH par cle uniquement cote infrastructure;
+- `allowed_ssh_cidr` doit etre restreint en production.
 
-- `.env` reel;
-- token, mot de passe ou secret OpenStack;
-- fichier `clouds.yaml` contenant des secrets;
-- cle SSH privee;
-- fichiers Terraform `*.tfstate` ou `*.tfvars`.
+## Equipe et roles
+
+| Personne | Role projet |
+|---|---|
+| Auguy | Portail, backend, data, dashboard, couts, audit, notifications, coordination technique |
+| Josue | Terraform/OpenTofu, provisioning reel, destruction reelle |
+| Lorenzo | Reseau, securite, isolation, SSH, Ansible |
+
+## Troubleshooting
+
+### `terraform` n'est pas reconnu
+
+Installer Terraform puis rouvrir le terminal :
+
+```powershell
+terraform version
+```
+
+### `Authentication failed` avec OpenStack
+
+Verifier :
+
+- `username`;
+- `password`;
+- `project_name`;
+- `auth_url`;
+- `region`;
+- mot de passe OpenStack specifique, pas forcement le mot de passe du compte web.
+
+### `No outputs found`
+
+Executer d'abord :
+
+```powershell
+terraform apply
+terraform output
+```
+
+### Docker ne demarre pas PostgreSQL
+
+Verifier que Docker Desktop est lance, puis :
+
+```powershell
+docker compose down
+docker compose up --build
+```
+
+### Les changements frontend ne se voient pas
+
+Recharger sans cache :
+
+```text
+Ctrl + F5
+```
+
+Puis verifier que l'URL est :
+
+```text
+http://localhost:8000/portal/
+```
+
+## License
+
+Projet academique realise dans le cadre du hackathon GIT x Satom IT, juin 2026.
