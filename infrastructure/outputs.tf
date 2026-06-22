@@ -30,7 +30,7 @@ output "vm_names" {
 
 output "private_ips" {
   description = "Private fixed IPs."
-  value       = openstack_compute_instance_v2.lab_vm[*].access_ip_v4
+  value       = [for port in openstack_networking_port_v2.lab_vm_port : port.all_fixed_ips[0]]
 }
 
 output "floating_ips" {
@@ -41,7 +41,7 @@ output "floating_ips" {
 output "ssh_commands" {
   description = "Ready-to-use SSH commands."
   value = [
-    for ip in(var.assign_floating_ip ? openstack_networking_floatingip_v2.lab_fip[*].address : openstack_compute_instance_v2.lab_vm[*].access_ip_v4) :
+    for ip in(var.assign_floating_ip ? openstack_networking_floatingip_v2.lab_fip[*].address : [for port in openstack_networking_port_v2.lab_vm_port : port.all_fixed_ips[0]]) :
     "ssh ubuntu@${ip}"
   ]
 }

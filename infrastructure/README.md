@@ -26,6 +26,30 @@ Puis remplir `terraform.tfvars` avec les valeurs du projet Infomaniak/OpenStack.
 
 Ne jamais commit `terraform.tfvars`, `*.tfstate`, cle SSH privee ou fichier OpenRC.
 
+## Cle SSH
+
+Terraform doit envoyer une cle publique a OpenStack pour permettre l'acces SSH aux VMs.
+
+Si aucune cle n'existe encore sur Windows :
+
+```powershell
+ssh-keygen -t ed25519 -C "cloud-lab"
+```
+
+Accepter le chemin propose par defaut :
+
+```text
+C:\Users\<votre-utilisateur>\.ssh\id_ed25519
+```
+
+Puis garder dans `terraform.tfvars` :
+
+```hcl
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+```
+
+Si vous utilisez une autre cle, renseigner le chemin complet du fichier `.pub`.
+
 ## Commandes
 
 ```powershell

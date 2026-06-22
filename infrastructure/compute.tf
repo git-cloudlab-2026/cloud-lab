@@ -1,6 +1,21 @@
 resource "openstack_compute_keypair_v2" "lab_keypair" {
   name       = "cloud-lab-key"
-  public_key = file(var.ssh_public_key_path)
+  public_key = trimspace(file(pathexpand(var.ssh_public_key_path)))
+}
+
+resource "openstack_networking_port_v2" "lab_vm_port" {
+  count          = var.vm_count
+  name           = format("%s-port-%02d", var.vm_name_prefix, count.index + 1)
+  network_id     = openstack_networking_network_v2.lab_network.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.lab_ssh.id
+  ]
+
+  fixed_ip {
+    subnet_id = openstack_networking_subnet_v2.lab_subnet.id
+  }
 }
 
 resource "openstack_compute_instance_v2" "lab_vm" {
@@ -10,12 +25,8 @@ resource "openstack_compute_instance_v2" "lab_vm" {
   flavor_name = var.flavor_name
   key_pair    = openstack_compute_keypair_v2.lab_keypair.name
 
-  security_groups = [
-    openstack_networking_secgroup_v2.lab_ssh.name
-  ]
-
   network {
-    uuid = openstack_networking_network_v2.lab_network.id
+    port = openstack_networking_port_v2.lab_vm_port[count.index].id
   }
 
   depends_on = [
@@ -28,8 +39,8 @@ resource "openstack_networking_floatingip_v2" "lab_fip" {
   pool  = var.external_network_name != "" ? var.external_network_name : var.external_network_id
 }
 
-resource "openstack_compute_floatingip_associate_v2" "lab_fip_assoc" {
+resource "openstack_networking_floatingip_associate_v2" "lab_fip_assoc" {
   count       = var.assign_floating_ip ? var.vm_count : 0
   floating_ip = openstack_networking_floatingip_v2.lab_fip[count.index].address
-  instance_id = openstack_compute_instance_v2.lab_vm[count.index].id
+  port_id     = openstack_networking_port_v2.lab_vm_port[count.index].id
 }

@@ -41,6 +41,11 @@ variable "ssh_public_key_path" {
   description = "Path to the SSH public key allowed on created VMs."
   type        = string
   default     = "~/.ssh/id_ed25519.pub"
+
+  validation {
+    condition     = fileexists(pathexpand(var.ssh_public_key_path))
+    error_message = "ssh_public_key_path must point to an existing public key. Create one with: ssh-keygen -t ed25519 -C \"cloud-lab\"."
+  }
 }
 
 variable "vm_count" {
