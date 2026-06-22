@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     jwt_access_token_expire_hours: int = 8
     mock_terraform_create_delay_seconds: float = 0.2
     mock_terraform_destroy_delay_seconds: float = 0.1
+    lifecycle_scheduler_enabled: bool = True
+    lifecycle_scheduler_interval_seconds: int = 3600
     cors_origins: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:5173", "null"]
 
     azure_tenant_id: str | None = None
