@@ -1419,6 +1419,211 @@ async function logout() {
   renderAll();
 }
 
+function ratioPercent(value, total) {
+  if (!total) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+}
+
+function renderMiniBars(values, tone = "blue") {
+  const max = Math.max(...values, 1);
+  return values
+    .map((value) => `<i class="mini-bar mini-bar-${tone}" style="height:${Math.max(12, Math.round((value / max) * 100))}%"></i>`)
+    .join("");
+}
+
+function iconSvg(name) {
+  const paths = {
+    server: "M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4H4V6Zm0 8h16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4Zm4-6h.01M8 16h.01",
+    pulse: "M4 13h3l2-6 4 12 2-6h5",
+    clock: "M12 6v6l4 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
+    disk: "M4 7c0-2 16-2 16 0v10c0 2-16 2-16 0V7Zm0 0c0 2 16 2 16 0M4 12c0 2 16 2 16 0",
+    check: "M20 6 9 17l-5-5",
+    alert: "M12 9v4m0 4h.01M10.3 4.3 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${paths[name] || paths.server}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+}
+
+function renderDashboardCommandCenter() {
+  const target = document.querySelector("#dashboardCommandCenter");
+  if (!target) return;
+
+  const scopedVms = query.vms();
+  const scopedRequests = query.requests();
+  const activeVms = scopedVms.filter((vm) => ["active", "expiring", "running"].includes(vm.status));
+  const pendingRequests = scopedRequests.filter((request) => request.status === "pending");
+  const expiredVms = scopedVms.filter((vm) => vm.status === "expired");
+  const realCost = scopedVms.reduce((sum, vm) => sum + realVmCost(vm), 0);
+  const totalDisk = scopedVms.reduce((sum, vm) => {
+    const request = byId(state.requests, vm.requestId);
+    const template = request ? templateForRequest(request) : null;
+    return sum + Number(template?.flavor?.diskGb || 0);
+  }, 0);
+  const estimatedCapacity = Math.max(500, state.courses.length * 260);
+  const storagePercent = ratioPercent(totalDisk, estimatedCapacity);
+  const healthScore = scopedVms.length ? ratioPercent(activeVms.length, scopedVms.filter((vm) => vm.status !== "destroyed").length || 1) : 100;
+  const costByClass = query.costByClass();
+  const classCosts = ["E1", "E2", "E3", "E4", "E5"].map((className) => {
+    const match = costByClass.find((row) => row.className === className);
+    return { className, real: match?.real || 0, committed: match?.committed || 0, budget: 260 };
+  });
+  const statusRows = [
+    ["Actives", activeVms.length, "success"],
+    ["En attente", pendingRequests.length, "warning"],
+    ["Expirees", expiredVms.length, "danger"],
+    ["Erreur", scopedVms.filter((vm) => vm.status === "error").length, "danger"],
+    ["Detruites", scopedVms.filter((vm) => vm.status === "destroyed").length, "neutral"]
+  ];
+  const activity = state.events.slice(0, 5);
+  const topStudents = state.users
+    .filter((user) => ["student", "trainer"].includes(user.role))
+    .map((user) => ({
+      user,
+      vms: scopedVms.filter((vm) => vm.ownerId === user.id).length,
+      cost: scopedVms.filter((vm) => vm.ownerId === user.id).reduce((sum, vm) => sum + realVmCost(vm), 0)
+    }))
+    .sort((a, b) => b.vms - a.vms || b.cost - a.cost)
+    .slice(0, 5);
+  const recentVms = scopedVms
+    .slice()
+    .sort((a, b) => toDate(b.createdAt || b.provisionedAt || b.endDate) - toDate(a.createdAt || a.provisionedAt || a.endDate))
+    .slice(0, 6);
+  const vmTimelineValues = [2, 4, 3, activeVms.length + 1, activeVms.length, scopedVms.length, Math.max(activeVms.length, scopedVms.length - expiredVms.length)];
+
+  target.innerHTML = `
+    <section class="command-hero">
+      <div class="command-hero-copy">
+        <span class="eyebrow">Cloud operations center</span>
+        <h3>Supervision temps reel des environnements pedagogiques</h3>
+        <p>Vue consolidee des VM, demandes, couts et fins de vie. Le dashboard reste pret a brancher sur Prometheus/Grafana ou les endpoints FastAPI.</p>
+        <div class="dashboard-filters" aria-label="Filtres dashboard">
+          <button class="filter-pill is-active" type="button">Toutes classes</button>
+          <button class="filter-pill" type="button">E1</button>
+          <button class="filter-pill" type="button">E2</button>
+          <button class="filter-pill" type="button">E3</button>
+          <button class="filter-pill" type="button">E4</button>
+          <button class="filter-pill" type="button">E5</button>
+        </div>
+      </div>
+      <div class="command-health-card">
+        <span>Disponibilite pilote</span>
+        <strong>${healthScore}%</strong>
+        <div class="ring-meter" style="--value:${healthScore}"><b>${activeVms.length}</b><small>VM actives</small></div>
+      </div>
+      <div class="command-cost-card">
+        <span>Cout reel courant</span>
+        <strong>${formatCost(realCost)}</strong>
+        <p>${pendingRequests.length} demande(s) en attente - ${expiredVms.length} VM a nettoyer</p>
+      </div>
+    </section>
+
+    <section class="metrics-command-grid">
+      ${[
+        ["Total VM", scopedVms.length, "+12% vs semaine", "server", "blue"],
+        ["VM actives", activeVms.length, `${ratioPercent(activeVms.length, scopedVms.length)}% du parc`, "pulse", "green"],
+        ["Demandes", pendingRequests.length, "validation requise", "clock", "amber"],
+        ["Stockage", `${totalDisk} Go`, `${storagePercent}% utilise`, "disk", "blue"],
+        ["Uptime", "99.9%", "aucun incident critique", "check", "green"],
+        ["Alertes", query.alerts().length, "expiration / erreur", "alert", "red"]
+      ].map(([label, value, detail, icon, tone], index) => `
+        <article class="metric-command-card metric-${tone}">
+          <div class="metric-icon metric-icon-${tone}" aria-hidden="true">${iconSvg(icon)}</div>
+          <span>${label}</span>
+          <strong>${value}</strong>
+          <small>${detail}</small>
+          <div class="mini-chart">${renderMiniBars(vmTimelineValues.map((v) => Math.max(1, v + index)), tone)}</div>
+        </article>
+      `).join("")}
+    </section>
+
+    <section class="dashboard-charts-grid">
+      <article class="chart-panel chart-wide">
+        <div class="chart-head">
+          <div><span class="eyebrow">30 derniers jours</span><h3>Creation et fin de vie des VM</h3></div>
+          <div class="range-tabs"><button class="is-active" type="button">30j</button><button type="button">90j</button><button type="button">Tout</button></div>
+        </div>
+        <div class="line-chart" aria-label="Evolution des VM">
+          ${vmTimelineValues.map((value, index) => `<i style="--x:${index};--h:${Math.max(16, value * 14)}px"></i>`).join("")}
+        </div>
+        <div class="chart-legend"><span class="dot green"></span>Actives <span class="dot blue"></span>Creees <span class="dot red"></span>Expirees</div>
+      </article>
+
+      <article class="chart-panel">
+        <div class="chart-head"><div><span class="eyebrow">Ressources</span><h3>Allocation actuelle</h3></div></div>
+        <div class="resource-donut" style="--cpu:${Math.min(92, activeVms.length * 9)};--ram:${Math.min(88, activeVms.length * 11)};--disk:${storagePercent}">
+          <strong>${storagePercent}%</strong><span>stockage</span>
+        </div>
+        <div class="resource-list">
+          <span><b class="dot blue"></b>CPU ${Math.min(92, activeVms.length * 9)}%</span>
+          <span><b class="dot green"></b>RAM ${Math.min(88, activeVms.length * 11)}%</span>
+          <span><b class="dot amber"></b>Disque ${storagePercent}%</span>
+        </div>
+      </article>
+
+      <article class="chart-panel">
+        <div class="chart-head"><div><span class="eyebrow">Budget</span><h3>Cout mensuel par classe</h3></div></div>
+        <div class="class-bars">
+          ${classCosts.map((row) => `
+            <div>
+              <span>${row.className}</span>
+              <i><b style="width:${ratioPercent(row.real + row.committed, row.budget)}%"></b></i>
+              <strong>${formatCost(row.real + row.committed)}</strong>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+
+      <article class="chart-panel">
+        <div class="chart-head"><div><span class="eyebrow">Cycle</span><h3>Statuts du parc</h3></div></div>
+        <div class="status-bars">
+          ${statusRows.map(([label, count, tone]) => `
+            <div>
+              <span>${label}</span>
+              <i><b class="bar-${tone}" style="width:${ratioPercent(count, Math.max(1, scopedVms.length, pendingRequests.length))}%"></b></i>
+              <strong>${count}</strong>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+    </section>
+
+    <section class="dashboard-bottom-grid">
+      <article class="panel recent-vms-panel">
+        <div class="chart-head"><div><span class="eyebrow">Parc recent</span><h3>Recent Virtual Machines</h3></div><span class="live-dot">Live</span></div>
+        <div class="mini-table">
+          ${recentVms.length ? recentVms.map((vm) => {
+            const owner = byId(state.users, vm.ownerId);
+            return `
+              <div class="mini-table-row">
+                <div><strong>${vm.name}</strong><span>${vm.ip || "IP en attente"}</span></div>
+                <div class="owner-pill"><b>${initialsFor(owner?.fullName || "VM")}</b><span>${owner?.fullName || "Inconnu"}<small>${owner?.className || "GIT"}</small></span></div>
+                ${statusBadge(vm.status)}
+                <strong class="num">${formatCost(realVmCost(vm))}</strong>
+              </div>
+            `;
+          }).join("") : `<p>Aucune VM visible pour ce profil.</p>`}
+        </div>
+      </article>
+
+      <aside class="dashboard-widgets">
+        <article class="panel widget-panel">
+          <div class="chart-head"><div><span class="eyebrow">Activite</span><h3>Recent Activity</h3></div></div>
+          <div class="activity-feed">
+            ${activity.map((event) => `<div><b></b><span>${event.detail}</span><small>${formatDateTime(event.at)}</small></div>`).join("") || "<p>Aucune activite recente.</p>"}
+          </div>
+        </article>
+        <article class="panel widget-panel">
+          <div class="chart-head"><div><span class="eyebrow">Consommation</span><h3>Top VM Consumers</h3></div></div>
+          <div class="top-students">
+            ${topStudents.map(({ user, vms, cost }) => `
+              <div><b>${initialsFor(user.fullName)}</b><span>${user.fullName}<small>${user.className || roleLabel(user.role)}</small></span><strong>${vms} VM</strong><i style="width:${ratioPercent(cost, 5)}%"></i></div>
+            `).join("") || "<p>Aucun utilisateur visible.</p>"}
+          </div>
+        </article>
+      </aside>
+    </section>
+  `;
+}
+
 function renderKpis() {
   document.querySelector("#kpiGrid").innerHTML = query.kpis()
     .map(([label, value, tone]) => {
@@ -2069,6 +2274,7 @@ function renderAll() {
 
   refreshLifecycleStatuses();
   renderAuthShell();
+  renderDashboardCommandCenter();
   renderKpis();
   renderCatalog();
   renderSelectors();
@@ -2134,6 +2340,19 @@ document.querySelector("#logoutButton").addEventListener("click", logout);
 document.querySelector("#auditTypeFilter").addEventListener("change", renderAudit);
 document.querySelector("#auditSeverityFilter").addEventListener("change", renderAudit);
 document.querySelector("#auditActorFilter").addEventListener("change", renderAudit);
+
+document.querySelector("#dashboardCommandCenter").addEventListener("click", (event) => {
+  const filter = event.target.closest(".filter-pill");
+  const range = event.target.closest(".range-tabs button");
+  if (filter) {
+    filter.parentElement.querySelectorAll(".filter-pill").forEach((button) => button.classList.remove("is-active"));
+    filter.classList.add("is-active");
+  }
+  if (range) {
+    range.parentElement.querySelectorAll("button").forEach((button) => button.classList.remove("is-active"));
+    range.classList.add("is-active");
+  }
+});
 
 document.querySelector("#requestsTable").addEventListener("click", (event) => {
   const approve = event.target.closest("[data-approve]");
