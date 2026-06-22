@@ -36,6 +36,12 @@ const API_ORIGIN = window.location.protocol.startsWith("http") && window.locatio
   : "http://localhost:8000";
 const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 const API_DEV_LOGIN_USER_ID = 1;
+const AUTH_TOKEN_KEY = "cloudLabAccessToken";
+
+if (new URLSearchParams(window.location.search).has("resetSession")) {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.history.replaceState(null, "", window.location.pathname);
+}
 
 if (DATA_MODE === "api" && window.location.protocol === "file:") {
   window.location.replace(`${API_ORIGIN}/portal/`);
@@ -428,13 +434,18 @@ function saveState() {
 }
 
 async function apiRequest(path, options = {}) {
+  const { skipAuth = false, headers: optionHeaders = {}, ...fetchOptions } = options;
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const headers = {
+    "Content-Type": "application/json",
+    ...(!skipAuth && token ? { Authorization: `Bearer ${token}` } : {}),
+    ...optionHeaders
+  };
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
+    headers,
+    ...fetchOptions
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -442,6 +453,40 @@ async function apiRequest(path, options = {}) {
     throw new Error(message);
   }
   return payload?.data ?? payload;
+}
+
+async function credentialLogin(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector(".credential-submit");
+  const email = document.querySelector("#credentialEmail").value.trim().toLowerCase();
+  const password = document.querySelector("#credentialPassword").value;
+
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Connexion...";
+  try {
+    const session = await apiRequest("/auth/login", {
+      method: "POST",
+      skipAuth: true,
+      body: JSON.stringify({ email, password })
+    });
+
+    localStorage.setItem(AUTH_TOKEN_KEY, session.access_token);
+    state.currentUser = buildAuthUser(mapApiUser(session.user));
+    await hydrateFromApi();
+    renderAll();
+    setView("dashboard");
+  } catch (error) {
+    alert(`Connexion impossible: ${error.message}`);
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Se connecter";
+  }
 }
 
 function mapApiRole(role) {
@@ -1212,12 +1257,26 @@ function renderAuthShell() {
   document.querySelector(".ops-strip").hidden = false;
   document.querySelector("#view-login").classList.remove("active");
 
-  document.querySelector("#currentUserInitials span").textContent = user.fullName.charAt(0);
+  // Topbar
+  document.querySelector("#currentUserInitials span").textContent = initialsFor(user.fullName);
   document.querySelector("#currentUserName").textContent = user.fullName;
-  document.querySelector("#currentUserRole").textContent = `${roleLabel(user.role)} - ${user.email}`;
+  document.querySelector("#currentUserRole").textContent = user.email;
   const badge = document.querySelector("#currentUserBadge");
   badge.textContent = roleLabel(user.role);
   badge.className = `role-badge ${roleBadgeClass(user.role)}`;
+
+  // Bloc sidebar utilisateur
+  const sidebarInitials = document.querySelector("#sidebarUserInitials");
+  const sidebarName = document.querySelector("#sidebarUserName");
+  const sidebarEmail = document.querySelector("#sidebarUserEmail");
+  const sidebarBadge = document.querySelector("#sidebarUserBadge");
+  if (sidebarInitials) sidebarInitials.textContent = initialsFor(user.fullName);
+  if (sidebarName) sidebarName.textContent = user.fullName;
+  if (sidebarEmail) sidebarEmail.textContent = user.email;
+  if (sidebarBadge) {
+    sidebarBadge.textContent = roleLabel(user.role);
+    sidebarBadge.className = `role-badge ${roleBadgeClass(user.role)}`;
+  }
 
   document.querySelectorAll(".nav-item").forEach((button) => {
     const allowed = isViewAllowed(button.dataset.view);
@@ -1354,6 +1413,7 @@ async function logout() {
   if (DATA_MODE === "api") {
     await apiRequest("/auth/logout", { method: "POST" }).catch((error) => console.warn(error));
   }
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   state.currentUser = null;
   saveState();
   renderAll();
@@ -2062,6 +2122,7 @@ document.querySelector("#resetDataButton").addEventListener("click", () => {
   state = normaliseState(state);
   renderAll();
 });
+document.querySelector("#credentialLoginForm").addEventListener("submit", credentialLogin);
 document.querySelector("#mockMicrosoftLoginButton").addEventListener("click", loginAsSelectedUser);
 document.querySelector("#mockLoginUsers").addEventListener("click", (event) => {
   const card = event.target.closest("[data-login-user]");

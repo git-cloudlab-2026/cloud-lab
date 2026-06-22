@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=zip-fixed-1">
 </head>
 <body>
   <aside class="sidebar">
@@ -27,6 +27,25 @@
       <button class="nav-item" data-view="vms">Parc VM</button>
       <button class="nav-item" data-view="audit">Journal d'audit</button>
     </nav>
+
+    <!-- Profil utilisateur + déconnexion en bas de la sidebar -->
+    <div class="sidebar-user-block" id="sidebarUserBlock">
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-avatar" id="sidebarUserInitials">A</div>
+        <div class="sidebar-user-text">
+          <strong id="sidebarUserName">Administrateur Lab</strong>
+          <small id="sidebarUserEmail">admin@git.swiss</small>
+          <span class="role-badge role-admin" id="sidebarUserBadge">Admin</span>
+        </div>
+      </div>
+      <button class="sidebar-logout-btn" id="logoutButton" type="button" title="Se déconnecter">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="16" height="16">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Se déconnecter
+      </button>
+    </div>
+
     <div class="sidebar-note">
       <strong>Session pilote</strong>
       <span>Tout est prêt pour rejouer le parcours de démo sans dépendance externe.</span>
@@ -36,7 +55,7 @@
   <main class="shell">
     <header class="topbar">
       <div>
-        <div class="eyebrow">Geneva Institute of Technology - Infomaniak Public Cloud - OpenStack</div>
+        <div class="eyebrow">Geneva Institute of Technology · Infomaniak Public Cloud · OpenStack</div>
         <h1>Ravi de vous revoir</h1>
         <p>Suivez les environnements de cours, les coûts et les machines proches de leur échéance.</p>
       </div>
@@ -44,10 +63,9 @@
         <div class="avatar" id="currentUserInitials" aria-hidden="true"><span>A</span></div>
         <div>
           <strong id="currentUserName">Administrateur Lab</strong>
-          <small id="currentUserRole">Pilotage cloud académique</small>
+          <small id="currentUserRole">admin@git.swiss</small>
           <span class="role-badge role-admin" id="currentUserBadge">Admin</span>
         </div>
-        <button class="ghost-button chip-logout" id="logoutButton" type="button">Se déconnecter</button>
       </div>
     </header>
 
@@ -75,21 +93,60 @@
         <div class="login-brand">
           <span class="brand-mark">GIT</span>
           <strong>Cloud Lab</strong>
-          <p>Connexion sécurisée via votre compte institutionnel</p>
+          <p>Connexion sécurisée via votre compte institutionnel GIT</p>
         </div>
         <div class="login-actions" aria-label="Connexion institutionnelle">
-          <button class="primary-button microsoft-button" id="mockMicrosoftLoginButton" type="button">
+
+          <!-- Formulaire identifiants JWT (mode mock backend) -->
+          <form class="credential-login-form" id="credentialLoginForm" novalidate>
+            <div class="credential-fields">
+              <label class="login-field-label" for="credentialEmail">
+                Adresse e-mail
+                <input
+                  type="email"
+                  id="credentialEmail"
+                  spellcheck="false"
+                  required
+                  placeholder="prenom.nom@git.swiss"
+                  autocomplete="username"
+                >
+              </label>
+              <label class="login-field-label" for="credentialPassword">
+                Mot de passe
+                <input
+                  type="password"
+                  id="credentialPassword"
+                  required
+                  minlength="3"
+                  placeholder="••••••••"
+                  autocomplete="current-password"
+                >
+              </label>
+              <button type="submit" class="primary-button credential-submit">Se connecter</button>
+            </div>
+          </form>
+
+          <div class="login-divider"><span>ou</span></div>
+
+          <!-- Connexion Microsoft 365 / OIDC -->
+          <button class="microsoft-button" id="mockMicrosoftLoginButton" type="button">
             <svg class="microsoft-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false">
-              <rect x="1" y="1" width="9" height="9" rx="1.5" fill="#f25022"></rect>
-              <rect x="12" y="1" width="9" height="9" rx="1.5" fill="#7fba00"></rect>
-              <rect x="1" y="12" width="9" height="9" rx="1.5" fill="#00a4ef"></rect>
-              <rect x="12" y="12" width="9" height="9" rx="1.5" fill="#ffb900"></rect>
+              <rect x="1"  y="1"  width="9" height="9" rx="1" fill="#f25022"></rect>
+              <rect x="12" y="1"  width="9" height="9" rx="1" fill="#7fba00"></rect>
+              <rect x="1"  y="12" width="9" height="9" rx="1" fill="#00a4ef"></rect>
+              <rect x="12" y="12" width="9" height="9" rx="1" fill="#ffb900"></rect>
             </svg>
             Se connecter avec Microsoft 365
           </button>
+
+          <!-- Cartes utilisateurs mock (mode développement uniquement) -->
           <div class="mock-user-list" id="mockLoginUsers"></div>
           <select id="mockLoginUser" hidden aria-hidden="true"></select>
-          <p id="loginAuthHint">Authentification via Microsoft Entra ID. Les comptes autorisés sont ceux du Geneva Institute of Technology.</p>
+
+          <p id="loginAuthHint" class="login-hint">
+            Authentification via Microsoft Entra ID.<br>
+            Les comptes autorisés sont ceux du Geneva Institute of Technology (<strong>@git.swiss</strong>).
+          </p>
         </div>
       </div>
     </section>
@@ -294,7 +351,7 @@
 
   </main>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=zip-fixed-1"></script>
 </body>
 </html>
 
