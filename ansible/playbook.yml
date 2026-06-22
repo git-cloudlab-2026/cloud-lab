@@ -1,0 +1,6 @@
+---
+- name: Hardening SSH sur VMs étudiants
+  hosts: all
+  become: true
+  roles:
+    - ssh_hardening
