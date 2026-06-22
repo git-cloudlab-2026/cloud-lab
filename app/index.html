@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=system-console-login-1">
+  <link rel="stylesheet" href="style.css?v=zip-fixed-1">
 </head>
 <body>
   <aside class="sidebar">
@@ -89,68 +89,49 @@
     </section>
 
     <section class="view login-view" id="view-login">
-      <div class="login-card panel">
-        <div class="login-brand">
-          <div class="login-brand-line">
-            <span class="brand-mark">GIT</span>
-            <span>System Console</span>
+      <div class="lp-card">
+        <div class="lp-logo-wrap">
+          <div class="lp-logo-box">GIT</div>
+          <span class="lp-logo-name">Cloud Lab</span>
+        </div>
+        <h1 class="lp-title">Se connecter</h1>
+        <p class="lp-sub">Utilisez votre compte institutionnel<br>Geneva Institute of Technology.</p>
+
+        <button class="lp-ms-btn" id="mockMicrosoftLoginButton" type="button">
+          <svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true" focusable="false">
+            <rect x="1"  y="1"  width="9" height="9" rx="1" fill="#f25022"></rect>
+            <rect x="12" y="1"  width="9" height="9" rx="1" fill="#7fba00"></rect>
+            <rect x="1"  y="12" width="9" height="9" rx="1" fill="#00a4ef"></rect>
+            <rect x="12" y="12" width="9" height="9" rx="1" fill="#ffb900"></rect>
+          </svg>
+          Continuer avec Microsoft 365
+        </button>
+
+        <div class="lp-divider">
+          <div class="lp-div-line"></div>
+          <span class="lp-div-label">Accès rapide démo</span>
+          <div class="lp-div-line"></div>
+        </div>
+
+        <div class="lp-users" id="mockLoginUsers"></div>
+        <select id="mockLoginUser" hidden aria-hidden="true"></select>
+
+        <!-- Formulaire credentials JWT caché (fallback API mode) -->
+        <form class="credential-login-form" id="credentialLoginForm" novalidate style="display:none;">
+          <div class="credential-fields">
+            <label class="login-field-label" for="credentialEmail">
+              Adresse e-mail
+              <input type="email" id="credentialEmail" spellcheck="false" required placeholder="prenom.nom@git.swiss" autocomplete="username">
+            </label>
+            <label class="login-field-label" for="credentialPassword">
+              Mot de passe
+              <input type="password" id="credentialPassword" required minlength="3" placeholder="••••••••" autocomplete="current-password">
+            </label>
+            <button type="submit" class="lp-ms-btn" style="margin-bottom:0;">Se connecter</button>
           </div>
-          <strong>Console Cloud Lab</strong>
-          <p>Plateforme académique d'orchestration cloud.</p>
-        </div>
-        <div class="login-actions" aria-label="Connexion institutionnelle">
+        </form>
 
-          <!-- Connexion Microsoft 365 / OIDC -->
-          <button class="microsoft-button" id="mockMicrosoftLoginButton" type="button">
-            <svg class="microsoft-icon" viewBox="0 0 22 22" aria-hidden="true" focusable="false">
-              <rect x="1"  y="1"  width="9" height="9" rx="1" fill="#f25022"></rect>
-              <rect x="12" y="1"  width="9" height="9" rx="1" fill="#7fba00"></rect>
-              <rect x="1"  y="12" width="9" height="9" rx="1" fill="#00a4ef"></rect>
-              <rect x="12" y="12" width="9" height="9" rx="1" fill="#ffb900"></rect>
-            </svg>
-            Connexion via Microsoft Entra ID
-          </button>
-
-          <div class="login-divider"><span>Accès rapide</span></div>
-
-          <!-- Cartes utilisateurs mock (mode développement uniquement) -->
-          <div class="mock-user-list" id="mockLoginUsers"></div>
-          <select id="mockLoginUser" hidden aria-hidden="true"></select>
-
-          <p id="loginAuthHint" class="login-hint">
-            Authentification via Microsoft Entra ID.<br>
-            Les comptes autorisés sont ceux du Geneva Institute of Technology (<strong>@git.swiss</strong>).
-          </p>
-
-          <!-- Formulaire identifiants JWT conservé en secours technique, masqué dans l'UI premium. -->
-          <form class="credential-login-form" id="credentialLoginForm" novalidate>
-            <div class="credential-fields">
-              <label class="login-field-label" for="credentialEmail">
-                Adresse e-mail
-                <input
-                  type="email"
-                  id="credentialEmail"
-                  spellcheck="false"
-                  required
-                  placeholder="prenom.nom@git.swiss"
-                  autocomplete="username"
-                >
-              </label>
-              <label class="login-field-label" for="credentialPassword">
-                Mot de passe
-                <input
-                  type="password"
-                  id="credentialPassword"
-                  required
-                  minlength="3"
-                  placeholder="••••••••"
-                  autocomplete="current-password"
-                >
-              </label>
-              <button type="submit" class="primary-button credential-submit">Se connecter</button>
-            </div>
-          </form>
-        </div>
+        <p class="lp-foot">Comptes autorisés · <b>@git.swiss</b></p>
       </div>
     </section>
 
@@ -355,7 +336,7 @@
 
   </main>
 
-  <script src="script.js?v=system-console-login-1"></script>
+  <script src="script.js?v=zip-fixed-1"></script>
 </body>
 </html>
 

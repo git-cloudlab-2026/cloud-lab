@@ -29,8 +29,8 @@
 const STORAGE_KEY = "git-cloud-lab-control-center-v4";
 const CLOCK_NOW = "2026-06-17T10:00:00";
 const EXPIRING_THRESHOLD_HOURS = 24;
-const DATA_MODE = "api"; // "api" = FastAPI/PostgreSQL, "local" = fallback statique.
-const AUTH_MODE_FRONT = "oidc"; // Le backend peut rester en AUTH_MODE=mock pendant le developpement.
+const DATA_MODE = "mock"; // "api" = FastAPI/PostgreSQL, "local" = fallback statique.
+const AUTH_MODE_FRONT = "mock"; // Le backend peut rester en AUTH_MODE=mock pendant le developpement.
 const API_ORIGIN = window.location.protocol.startsWith("http") && window.location.port === "8000"
   ? window.location.origin
   : "http://localhost:8000";
@@ -1310,31 +1310,45 @@ function renderPermissionStates() {
 function renderLoginUsers() {
   const select = document.querySelector("#mockLoginUser");
   const list = document.querySelector("#mockLoginUsers");
-  const hint = document.querySelector("#loginAuthHint");
 
   if (AUTH_MODE_FRONT === "oidc") {
     select.innerHTML = "";
     list.innerHTML = "";
     list.hidden = true;
-    hint.textContent = "Authentification via Microsoft Entra ID. Les comptes autorisés sont ceux du Geneva Institute of Technology.";
     return;
   }
 
+  const dotClass = (role) => {
+    if (role === "admin") return "lp-dot-admin";
+    if (role === "validator") return "lp-dot-valid";
+    if (role === "trainer") return "lp-dot-trainer";
+    return "lp-dot-student";
+  };
+
+  const roleClass = (role) => {
+    if (role === "admin") return "lp-role-admin";
+    if (role === "validator") return "lp-role-valid";
+    if (role === "trainer") return "lp-role-trainer";
+    return "lp-role-student";
+  };
+
   list.hidden = false;
-  hint.textContent = "Mode développement : sélection d'un profil de test sans appel au tenant Microsoft.";
-  const quickUsers = state.users.filter((user) => user.role !== "admin").slice(0, 2);
-  const visibleUsers = quickUsers.length ? quickUsers : state.users.slice(0, 2);
   select.innerHTML = state.users
     .map((user) => `<option value="${user.id}">${user.fullName} - ${roleLabel(user.role)}</option>`)
     .join("");
-  list.innerHTML = visibleUsers
+
+  list.innerHTML = state.users
     .map((user) => `
-      <button class="mock-user-card" type="button" data-login-user="${user.id}">
-        <span class="mock-avatar ${roleBadgeClass(user.role)}">${initialsFor(user.fullName)}</span>
-        <span>
-          <strong>${user.fullName}</strong>
-          <small>Role : ${roleLabel(user.role)}</small>
-        </span>
+      <button class="lp-user-card" type="button" data-login-user="${user.id}">
+        <div class="lp-user-av">${initialsFor(user.fullName)}</div>
+        <div class="lp-user-info">
+          <div class="lp-user-name">${user.fullName}</div>
+          <div class="lp-user-meta">
+            <div class="lp-dot ${dotClass(user.role)}"></div>
+            <span class="lp-user-role ${roleClass(user.role)}">${roleLabel(user.role)}</span>
+          </div>
+        </div>
+        <span class="lp-user-arrow">→</span>
       </button>
     `)
     .join("");
@@ -1375,7 +1389,7 @@ async function startInstitutionalLogin() {
       <span class="ms-grid" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
       </span>
-      Connexion via Microsoft Entra ID
+      Se connecter avec Microsoft 365
     `;
   }
 }
