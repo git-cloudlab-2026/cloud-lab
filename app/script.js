@@ -1322,18 +1322,19 @@ function renderLoginUsers() {
 
   list.hidden = false;
   hint.textContent = "Mode développement : sélection d'un profil de test sans appel au tenant Microsoft.";
+  const quickUsers = state.users.filter((user) => user.role !== "admin").slice(0, 2);
+  const visibleUsers = quickUsers.length ? quickUsers : state.users.slice(0, 2);
   select.innerHTML = state.users
     .map((user) => `<option value="${user.id}">${user.fullName} - ${roleLabel(user.role)}</option>`)
     .join("");
-  list.innerHTML = state.users
+  list.innerHTML = visibleUsers
     .map((user) => `
       <button class="mock-user-card" type="button" data-login-user="${user.id}">
         <span class="mock-avatar ${roleBadgeClass(user.role)}">${initialsFor(user.fullName)}</span>
         <span>
           <strong>${user.fullName}</strong>
-          <small>${user.email}</small>
+          <small>Role : ${roleLabel(user.role)}</small>
         </span>
-        <span class="role-badge ${roleBadgeClass(user.role)}">${roleLabel(user.role)}</span>
       </button>
     `)
     .join("");
@@ -1374,7 +1375,7 @@ async function startInstitutionalLogin() {
       <span class="ms-grid" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
       </span>
-      Se connecter avec Microsoft 365
+      Connexion via Microsoft Entra ID
     `;
   }
 }

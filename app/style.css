@@ -1504,3 +1504,219 @@ tr:hover td {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==============================
+   Login exact - system console
+============================== */
+body:not(.is-authenticated) {
+  background: #000000;
+}
+
+body:not(.is-authenticated) #view-login {
+  min-height: 100vh;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  background: #000000;
+}
+
+body:not(.is-authenticated) .login-card {
+  width: min(100%, 486px);
+  max-width: 486px;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+body:not(.is-authenticated) .login-brand {
+  justify-items: start;
+  gap: 0;
+  margin-bottom: 50px;
+  text-align: left;
+}
+
+.login-brand-line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+body:not(.is-authenticated) .login-brand .brand-mark {
+  width: 36px;
+  height: 36px;
+  color: #000000;
+  background: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 900;
+}
+
+.login-brand-line > span:last-child {
+  color: #4b5563;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+body:not(.is-authenticated) .login-brand strong {
+  color: #ffffff;
+  font-size: 30px;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+body:not(.is-authenticated) .login-brand p {
+  margin-top: 12px;
+  color: #71717a;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+body:not(.is-authenticated) .login-actions {
+  display: grid;
+  gap: 0;
+}
+
+body:not(.is-authenticated) .microsoft-button {
+  width: 100%;
+  min-height: 57px;
+  padding: 12px 16px;
+  color: #000000;
+  background: #ffffff;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: background 150ms cubic-bezier(0.16, 1, 0.3, 1), transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body:not(.is-authenticated) .microsoft-button:hover {
+  background: #e4e4e7;
+}
+
+body:not(.is-authenticated) .microsoft-button:active {
+  transform: scale(0.99);
+}
+
+body:not(.is-authenticated) .microsoft-icon,
+body:not(.is-authenticated) .ms-grid {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.ms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+}
+
+.ms-grid span {
+  display: block;
+  border-radius: 1px;
+}
+
+.ms-grid span:nth-child(1) { background: #f25022; }
+.ms-grid span:nth-child(2) { background: #7fba00; }
+.ms-grid span:nth-child(3) { background: #00a4ef; }
+.ms-grid span:nth-child(4) { background: #ffb900; }
+
+body:not(.is-authenticated) .login-divider {
+  margin: 34px 0 34px;
+  color: #4b5563;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+}
+
+body:not(.is-authenticated) .login-divider::before,
+body:not(.is-authenticated) .login-divider::after {
+  background: #111113;
+}
+
+body:not(.is-authenticated) .mock-user-list {
+  display: grid;
+  gap: 11px;
+}
+
+body:not(.is-authenticated) .mock-user-card {
+  min-height: 86px;
+  padding: 0 20px 0 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  color: #ffffff;
+  background: #050507;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+body:not(.is-authenticated) .mock-user-card:hover {
+  background: #0c0c0e;
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+body:not(.is-authenticated) .mock-user-card::after {
+  content: "→";
+  margin-left: auto;
+  color: #4b5563;
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+body:not(.is-authenticated) .mock-user-card:hover::after {
+  color: #ffffff;
+}
+
+body:not(.is-authenticated) .mock-avatar {
+  width: 40px;
+  height: 40px;
+  color: #d4d4d8;
+  background: #09090b;
+  border: 1px solid #1f1f24;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+body:not(.is-authenticated) .mock-user-card strong {
+  color: #e4e4e7;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+body:not(.is-authenticated) .mock-user-card small {
+  margin-top: 6px;
+  color: #71717a;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+body:not(.is-authenticated) .login-hint,
+body:not(.is-authenticated) .credential-login-form {
+  display: none !important;
+}
+
+@media (max-width: 620px) {
+  body:not(.is-authenticated) #view-login {
+    place-items: start center;
+    padding-top: 90px;
+  }
+
+  body:not(.is-authenticated) .login-card {
+    width: 100%;
+  }
+}
