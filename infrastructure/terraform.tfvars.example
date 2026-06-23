@@ -1,17 +1,25 @@
-auth_url            = "https://api.pub1.infomaniak.cloud/identity/v3"
-region              = "dc4-a"
-project_name        = "Projet-ALJ"
-username            = "PCU-XXXX"
-password            = "CHANGE_ME"
-external_network_id = "CHANGE_ME_EXTERNAL_NETWORK_ID"
-# If your OpenStack dashboard gives a public network name, set it here.
-# Otherwise leave empty and Terraform will reuse external_network_id.
-external_network_name = ""
+openstack_cloud_name  = "openstack"
+region                = "dc4-a"
+project_prefix        = "cloud-lab"
+network_segment       = "IT-2026-A"
+network_cidr          = "10.42.0.0/24"
+external_network_name = "ext-net"
 
-ssh_public_key_path = "~/.ssh/id_ed25519.pub"
-vm_count            = 1
-vm_name_prefix      = "git-cloud-lab"
-image_name          = "Ubuntu 22.04"
-flavor_name         = "a1-ram2-disk20-perf1"
-allowed_ssh_cidr    = "0.0.0.0/0"
-assign_floating_ip  = true
+allowed_ssh_cidrs = [
+  "0.0.0.0/0", # A restreindre : IP du GIT / VPN
+]
+
+ssh_keypair_name = "cloud-lab-key"
+ssh_public_key   = "ssh-ed25519 AAAA... remplacer-par-la-vraie-cle-publique"
+
+assign_floating_ip = false
+
+vm_requests = [
+  {
+    name        = "e1-eleve01-vm"
+    flavor_name = "a1-ram2-disk20-perf1"
+    image_name  = "Ubuntu 24.04 LTS Noble Numbat"
+    class_tag   = "E1"
+    owner_email = "etudiant1@giptech.ch"
+  },
+]

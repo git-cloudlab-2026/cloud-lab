@@ -1,47 +1,30 @@
+# Outputs structures pour matcher le payload attendu par le backend FastAPI :
+# PATCH /api/v1/virtual-machines/{id}/provisioning-result
+# { "provider_vm_id": ..., "ip_address": ..., "status": ..., "network_segment": ... }
+
+output "provisioning_results" {
+  description = "Resultats de provisioning, un objet par VM, prets a etre envoyes au backend."
+  value = {
+    for name, vm in openstack_compute_instance_v2.vm : name => {
+      provider_vm_id  = vm.id
+      ip_address      = var.assign_floating_ip ? openstack_networking_floatingip_v2.vm_fip[name].address : vm.access_ip_v4
+      status          = "running"
+      network_segment = var.network_segment
+    }
+  }
+}
+
+output "ssh_fingerprint" {
+  description = "Fingerprint de la keypair SSH utilisee pour toutes les VM du segment."
+  value       = openstack_compute_keypair_v2.lab_keypair.fingerprint
+}
+
 output "network_id" {
-  description = "Private OpenStack network ID."
+  description = "ID du reseau prive cree pour ce segment."
   value       = openstack_networking_network_v2.lab_network.id
 }
 
-output "subnet_id" {
-  description = "Private OpenStack subnet ID."
-  value       = openstack_networking_subnet_v2.lab_subnet.id
-}
-
 output "router_id" {
-  description = "OpenStack router ID."
+  description = "ID du routeur reliant le segment au reseau externe."
   value       = openstack_networking_router_v2.lab_router.id
-}
-
-output "security_group_id" {
-  description = "Security group allowing SSH access."
-  value       = openstack_networking_secgroup_v2.lab_ssh.id
-}
-
-output "vm_ids" {
-  description = "Created VM IDs."
-  value       = openstack_compute_instance_v2.lab_vm[*].id
-}
-
-output "vm_names" {
-  description = "Created VM names."
-  value       = openstack_compute_instance_v2.lab_vm[*].name
-}
-
-output "private_ips" {
-  description = "Private fixed IPs."
-  value       = [for port in openstack_networking_port_v2.lab_vm_port : port.all_fixed_ips[0]]
-}
-
-output "floating_ips" {
-  description = "Public floating IPs when enabled."
-  value       = var.assign_floating_ip ? openstack_networking_floatingip_v2.lab_fip[*].address : []
-}
-
-output "ssh_commands" {
-  description = "Ready-to-use SSH commands."
-  value = [
-    for ip in(var.assign_floating_ip ? openstack_networking_floatingip_v2.lab_fip[*].address : [for port in openstack_networking_port_v2.lab_vm_port : port.all_fixed_ips[0]]) :
-    "ssh ubuntu@${ip}"
-  ]
 }

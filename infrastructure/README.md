@@ -1,83 +1,77 @@
-# Infrastructure Terraform / OpenTofu
+# Terraform - Cloud Lab Control Center (OpenStack / Infomaniak)
 
-Ce dossier contient le point de depart Infrastructure as Code pour Infomaniak Public Cloud via OpenStack.
+Infra complete pour le provisioning des VM pedagogiques : reseau, securite, VM.
+Ce module ne touche pas au backend FastAPI ; il produit en sortie exactement
+ce que le backend attend via `PATCH /api/v1/virtual-machines/{id}/provisioning-result`.
 
-## Ressources creees
-
-- reseau prive OpenStack;
-- sous-reseau IPv4;
-- routeur connecte au reseau externe;
-- security group SSH + ICMP;
-- paire de cles SSH;
-- une ou plusieurs VMs Ubuntu;
-- floating IPs optionnelles;
-- outputs VM ID, IPs et commandes SSH.
-
-## Configuration
-
-Copier le fichier exemple :
-
-```powershell
-cd infrastructure
-Copy-Item terraform.tfvars.example terraform.tfvars
-```
-
-Puis remplir `terraform.tfvars` avec les valeurs du projet Infomaniak/OpenStack.
-
-Ne jamais commit `terraform.tfvars`, `*.tfstate`, cle SSH privee ou fichier OpenRC.
-
-## Cle SSH
-
-Terraform doit envoyer une cle publique a OpenStack pour permettre l'acces SSH aux VMs.
-
-Si aucune cle n'existe encore sur Windows :
-
-```powershell
-ssh-keygen -t ed25519 -C "cloud-lab"
-```
-
-Accepter le chemin propose par defaut :
+## Contenu
 
 ```text
-C:\Users\<votre-utilisateur>\.ssh\id_ed25519
+versions.tf              Provider OpenStack (~> 1.53), auth via clouds.yaml
+variables.tf              Toutes les variables (region, reseau, VM, SSH...)
+network.tf                Network + subnet + router + interface vers ext-net
+security.tf                Security group (SSH restreint, ICMP interne, egress libre) + keypair
+compute.tf                  Instances + floating IP optionnelle
+outputs.tf                 provisioning_results au format attendu par le backend
+terraform.tfvars.example   Exemple de variables sans secret
+clouds.yaml.example         Exemple d'auth OpenStack sans secret
 ```
 
-Puis garder dans `terraform.tfvars` :
+## Prerequis
 
-```hcl
-ssh_public_key_path = "~/.ssh/id_ed25519.pub"
-```
+- Terraform >= 1.6
+- Acces OpenStack Infomaniak valides
+- Un `clouds.yaml` reel (copie de `clouds.yaml.example`), **jamais commit**
 
-Si vous utilisez une autre cle, renseigner le chemin complet du fichier `.pub`.
-
-## Commandes
+## Authentification
 
 ```powershell
-terraform init
-terraform fmt
-terraform validate
-terraform plan
-terraform apply
-terraform output
+copy clouds.yaml.example clouds.yaml
+# editer clouds.yaml avec les vrais identifiants Infomaniak
 ```
 
-Destruction complete :
+Terraform lit `clouds.yaml` automatiquement (repertoire courant, puis
+`~/.config/openstack/clouds.yaml`).
+
+## Utilisation
+
+```powershell
+copy terraform.tfvars.example terraform.tfvars
+# editer terraform.tfvars : cle SSH publique, liste des VM a creer
+
+terraform init
+terraform plan
+terraform apply
+```
+
+## Recuperer les resultats pour le backend
+
+```powershell
+terraform output -json provisioning_results
+```
+
+Chaque entree correspond a une VM et contient `provider_vm_id`, `ip_address`,
+`status`, `network_segment` — directement utilisable pour appeler :
+
+```http
+PATCH /api/v1/virtual-machines/{id}/provisioning-result
+```
+
+## Destruction (fin de vie)
 
 ```powershell
 terraform destroy
 ```
 
-## Integration future backend
+Le statut `destroyed` cote backend doit ensuite etre rapporte via :
 
-Le backend ne lance pas Terraform directement. Le contrat propre est :
+```http
+PATCH /api/v1/virtual-machines/{id}/destruction-result
+```
 
-1. le portail approuve une demande;
-2. un job/provisioner externe lance Terraform;
-3. Terraform retourne `vm_id`, `ip_address`, `name`;
-4. le provisioner appelle l'API backend pour enregistrer le resultat.
+## Securite
 
-Endpoints backend utiles :
-
-- `POST /api/v1/vm-requests/{id}/provision`
-- `PATCH /api/v1/virtual-machines/{id}/provisioning-result`
-- `PATCH /api/v1/virtual-machines/{id}/destruction-result`
+- Jamais commit : `clouds.yaml`, `*.tfvars` (hors `.example`), `*.tfstate`, `.terraform/`.
+- `allowed_ssh_cidrs` doit etre resserre en dehors du `0.0.0.0/0` de demo.
+- Un security group isole par segment (`network_segment`) limite la portee
+  d'une classe a l'autre (E1 a E5).

@@ -1,102 +1,93 @@
-variable "auth_url" {
-  description = "OpenStack Keystone authentication URL from Infomaniak Horizon / OpenRC."
+variable "openstack_cloud_name" {
+  description = "Nom du cloud dans clouds.yaml (section a utiliser pour l'auth OpenStack)."
   type        = string
+  default     = "openstack"
 }
 
 variable "region" {
-  description = "Infomaniak Public Cloud region, for example dc4-a."
+  description = "Region OpenStack Infomaniak."
   type        = string
   default     = "dc4-a"
 }
 
-variable "project_name" {
-  description = "OpenStack project/tenant name."
+variable "project_prefix" {
+  description = "Prefixe applique a toutes les ressources (ex: cloud-lab)."
   type        = string
+  default     = "cloud-lab"
 }
 
-variable "username" {
-  description = "OpenStack API username, for example PCU-XXXX."
+variable "network_segment" {
+  description = "Nom du segment reseau pedagogique (doit matcher network_segment cote backend, ex: IT-2026-A)."
   type        = string
-  sensitive   = true
+  default     = "IT-2026-A"
 }
 
-variable "password" {
-  description = "OpenStack API password."
-  type        = string
-  sensitive   = true
-}
-
-variable "external_network_id" {
-  description = "External/public network ID used by the router gateway."
-  type        = string
-}
-
-variable "external_network_name" {
-  description = "External/public network name used for floating IP allocation. If empty, external_network_id is used."
-  type        = string
-  default     = ""
-}
-
-variable "ssh_public_key_path" {
-  description = "Path to the SSH public key allowed on created VMs."
-  type        = string
-  default     = "~/.ssh/id_ed25519.pub"
-
-  validation {
-    condition     = fileexists(pathexpand(var.ssh_public_key_path))
-    error_message = "ssh_public_key_path must point to an existing public key. Create one with: ssh-keygen -t ed25519 -C \"cloud-lab\"."
-  }
-}
-
-variable "vm_count" {
-  description = "Number of lab VMs to create for a course session."
-  type        = number
-  default     = 1
-
-  validation {
-    condition     = var.vm_count >= 1 && var.vm_count <= 25
-    error_message = "vm_count must stay between 1 and 25 for one class batch."
-  }
-}
-
-variable "vm_name_prefix" {
-  description = "Prefix used for VM names."
-  type        = string
-  default     = "git-cloud-lab"
-}
-
-variable "image_name" {
-  description = "OpenStack image used for lab VMs."
-  type        = string
-  default     = "Ubuntu 22.04"
-}
-
-variable "flavor_name" {
-  description = "OpenStack flavor used for lab VMs."
-  type        = string
-  default     = "a1-ram2-disk20-perf1"
-}
-
-variable "private_network_cidr" {
-  description = "CIDR of the private lab network."
+variable "network_cidr" {
+  description = "Bloc CIDR du reseau prive cree pour ce segment."
   type        = string
   default     = "10.42.0.0/24"
 }
 
-variable "private_network_gateway" {
-  description = "Gateway IP of the private lab subnet."
+variable "external_network_name" {
+  description = "Nom du reseau externe / public Infomaniak utilise pour le routeur et les floating IP."
   type        = string
-  default     = "10.42.0.1"
+  default     = "ext-floating1"
 }
 
-variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to SSH into VMs. Restrict this in production."
+variable "dns_servers" {
+  description = "Serveurs DNS pour le subnet prive."
+  type        = list(string)
+  default     = ["8.8.8.8", "1.1.1.1"]
+}
+
+variable "allowed_ssh_cidrs" {
+  description = "CIDR autorises a se connecter en SSH (22) aux VM. Restreindre en production."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "image_name" {
+  description = "Nom de l'image OpenStack utilisee par defaut pour les VM (ex: distribution Linux standard)."
   type        = string
-  default     = "0.0.0.0/0"
+  default     = "Ubuntu 24.04 LTS Noble Numbat"
+}
+
+variable "default_flavor_name" {
+  description = "Flavor OpenStack par defaut (taille de VM) si aucune n'est precisee par VM."
+  type        = string
+  default     = "a1-ram2-disk20-perf1"
+}
+
+variable "ssh_keypair_name" {
+  description = "Nom de la keypair OpenStack a utiliser/creer pour l'acces SSH aux VM."
+  type        = string
+  default     = "cloud-lab-key"
+}
+
+variable "ssh_public_key" {
+  description = "Cle publique SSH (contenu, pas chemin) injectee dans la keypair OpenStack."
+  type        = string
+  sensitive   = true
 }
 
 variable "assign_floating_ip" {
-  description = "Whether to allocate and attach one floating IP per VM."
+  description = "Si true, attribue une floating IP publique a chaque VM provisionnee."
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "vm_requests" {
+  description = <<-EOT
+    Liste des VM a provisionner. Correspond au contrat attendu par le backend
+    FastAPI (route /api/v1/virtual-machines/{id}/provisioning-result) :
+    name, ip_address (calculee), network_segment, provider_vm_id (calcule).
+  EOT
+  type = list(object({
+    name        = string
+    flavor_name = optional(string)
+    image_name  = optional(string)
+    class_tag   = optional(string) # E1..E5, pour tracabilite cote audit
+    owner_email = optional(string)
+  }))
+  default = []
 }

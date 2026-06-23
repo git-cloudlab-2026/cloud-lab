@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.6.0"
 
   required_providers {
     openstack = {
@@ -10,9 +10,7 @@ terraform {
 }
 
 provider "openstack" {
-  auth_url    = var.auth_url
-  region      = var.region
-  tenant_name = var.project_name
-  user_name   = var.username
-  password    = var.password
+  # Authentification via clouds.yaml (recommande, pas de secret dans le code).
+  # ~/.config/openstack/clouds.yaml ou ./clouds.yaml a la racine du module.
+  cloud = var.openstack_cloud_name
 }
