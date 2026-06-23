@@ -324,9 +324,9 @@ Le pipeline GitHub Actions `.github/workflows/ci.yml` verifie :
 | Personne | Role projet |
 |---|---|
 | Auguy | Portail, backend, data, dashboard, couts, audit, notifications, coordination technique |
-| Josue | Terraform/OpenTofu, provisioning reel, destruction reelle |
+| Josue | provisioning reel, destruction reelle |
 | Lorenzo | Reseau, securite, isolation, SSH, Ansible |
-
+| Zaguez | Terraform/OpenTofu,
 ## Troubleshooting
 
 ### `terraform` n'est pas reconnu
