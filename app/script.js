@@ -29,11 +29,10 @@
 const STORAGE_KEY = "git-cloud-lab-control-center-v4";
 const CLOCK_NOW = "2026-06-17T10:00:00";
 const EXPIRING_THRESHOLD_HOURS = 24;
-const DATA_MODE = "mock"; // "api" = FastAPI/PostgreSQL, "local" = fallback statique.
+const IS_HTTP_APP = window.location.protocol === "http:" || window.location.protocol === "https:";
+const DATA_MODE = "api"; // Production: FastAPI/PostgreSQL uniquement.
 const AUTH_MODE_FRONT = "mock"; // Le backend peut rester en AUTH_MODE=mock pendant le developpement.
-const API_ORIGIN = window.location.protocol.startsWith("http") && window.location.port === "8000"
-  ? window.location.origin
-  : "http://localhost:8000";
+const API_ORIGIN = IS_HTTP_APP ? window.location.origin : "http://localhost:8000";
 const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 const API_DEV_LOGIN_USER_ID = 1;
 const AUTH_TOKEN_KEY = "cloudLabAccessToken";
@@ -93,16 +92,17 @@ const PRICING_MODEL = {
   }
 };
 
-const STATUS_ORDER = ["pending", "approved", "provisioning", "active", "expiring", "expired", "destroyed"];
+const STATUS_ORDER = ["pending", "approved", "provisioning", "active", "expiring", "expired", "failed", "destroyed"];
 const VALID_TRANSITIONS = {
-  pending: ["approved", "refused", "error"],
-  approved: ["provisioning", "refused", "error"],
-  provisioning: ["active", "error", "expired"],
-  active: ["expiring", "expired", "error"],
-  expiring: ["expired", "destroyed", "error"],
-  expired: ["destroyed", "error"],
+  pending: ["approved", "refused", "failed", "error"],
+  approved: ["provisioning", "refused", "failed", "error"],
+  provisioning: ["active", "failed", "error", "expired"],
+  active: ["expiring", "expired", "failed", "error"],
+  expiring: ["expired", "destroyed", "failed", "error"],
+  expired: ["destroyed", "failed", "error"],
   destroyed: [],
   refused: [],
+  failed: [],
   error: ["provisioning", "destroyed"]
 };
 
@@ -415,6 +415,7 @@ const seed = {
 };
 
 let state = normaliseState(loadState());
+const pendingRequestActions = new Set();
 refreshLifecycleStatuses();
 
 function loadState() {
@@ -1023,9 +1024,11 @@ function statusBadge(status) {
     expired: "Expirée",
     destroyed: "Détruite",
     refused: "Refusée",
+    failed: "Echec",
     error: "Erreur"
   };
-  return `<span class="badge status-${status}">${labels[status] || status}</span>`;
+  const className = status === "failed" ? "error" : status;
+  return `<span class="badge status-${className}">${labels[status] || status}</span>`;
 }
 
 function inferAuditSeverity(type) {
@@ -1425,6 +1428,26 @@ async function loginAsSelectedUser() {
   }
   const select = document.querySelector("#mockLoginUser");
   if (!select.value && state.users.length > 0) select.value = String(state.users[0].id);
+
+  if (DATA_MODE === "api") {
+    const userId = select.value || API_DEV_LOGIN_USER_ID;
+    document.body.classList.add("login-leaving");
+    try {
+      const user = await apiRequest(`/auth/mock-login/${userId}`, { method: "POST", skipAuth: true });
+      state.currentUser = buildAuthUser(mapApiUser(user));
+      await hydrateFromApi();
+      saveState();
+      renderAll();
+      setView("dashboard");
+    } catch (error) {
+      console.error(error);
+      alert(`Connexion impossible: ${error.message}. Verifiez que le backend FastAPI tourne sur ${API_ORIGIN}.`);
+    } finally {
+      document.body.classList.remove("login-leaving");
+    }
+    return;
+  }
+
   const user = byId(state.users, select.value);
   if (!user) return;
   document.body.classList.add("login-leaving");
@@ -1752,14 +1775,15 @@ function renderRequests() {
       const course = courseForRequest(request);
       const template = templateForRequest(request);
       const actions = [];
+      const isBusy = pendingRequestActions.has(String(request.id));
       if (request.status === "pending" && can("approveRequest")) {
-        actions.push(`<button class="action-button approve" data-approve="${request.id}">Approuver</button>`);
+        actions.push(`<button class="action-button approve" data-approve="${request.id}" ${isBusy ? "disabled" : ""}>${isBusy ? "En cours..." : "Approuver"}</button>`);
       }
       if (request.status === "pending" && can("refuseRequest")) {
-        actions.push(`<button class="action-button refuse" data-refuse="${request.id}">Refuser</button>`);
+        actions.push(`<button class="action-button refuse" data-refuse="${request.id}" ${isBusy ? "disabled" : ""}>Refuser</button>`);
       }
       if (request.status === "approved" && can("provisionVm")) {
-        actions.push(`<button class="action-button approve" data-provision="${request.id}">Provisionner</button>`);
+        actions.push(`<button class="action-button approve" data-provision="${request.id}" ${isBusy ? "disabled" : ""}>${isBusy ? "Provisionnement..." : "Provisionner"}</button>`);
       }
       return `
         <tr>
@@ -2033,8 +2057,11 @@ async function createRequest(event) {
 
 async function approveRequest(id) {
   if (!requirePermission("approveRequest")) return;
+  if (pendingRequestActions.has(String(id))) return;
   const request = byId(state.requests, id);
   if (DATA_MODE === "api") {
+    pendingRequestActions.add(String(id));
+    renderRequests();
     try {
       await apiRequest(`/vm-requests/${id}`, {
         method: "PATCH",
@@ -2047,6 +2074,9 @@ async function approveRequest(id) {
       await refreshFromApiAndRender();
     } catch (error) {
       alert(`Validation impossible: ${error.message}`);
+    } finally {
+      pendingRequestActions.delete(String(id));
+      renderRequests();
     }
     return;
   }
@@ -2097,6 +2127,7 @@ async function refuseRequest(id) {
 
 async function provisionRequest(requestId) {
   if (!requirePermission("provisionVm")) return;
+  if (requestId && pendingRequestActions.has(String(requestId))) return;
   const request = requestId ? byId(state.requests, requestId) : state.requests.find((item) => item.status === "approved");
   if (!request) {
     alert("Aucune demande approuvée à provisionner.");
@@ -2107,12 +2138,18 @@ async function provisionRequest(requestId) {
     return;
   }
   if (DATA_MODE === "api") {
+    pendingRequestActions.add(String(request.id));
+    renderRequests();
     try {
       await apiRequest(`/vm-requests/${request.id}/provision`, { method: "POST" });
       await refreshFromApiAndRender();
-      alert("Intention de provisioning envoyee. Terraform pourra confirmer le resultat via l'API.");
+      alert("Provisionnement termine. La VM est maintenant visible dans le Parc VM.");
     } catch (error) {
       alert(`Provisioning impossible: ${error.message}`);
+      await refreshFromApiAndRender();
+    } finally {
+      pendingRequestActions.delete(String(request.id));
+      renderRequests();
     }
     return;
   }
