@@ -214,7 +214,7 @@ const seed = {
       requesterId: 2,
       courseId: 1,
       templateId: 1,
-      quantity: 20,
+      quantity: 25,
       startDate: "2026-06-19",
       endDate: "2026-06-26",
       status: "pending",
@@ -1216,6 +1216,13 @@ function setView(viewName) {
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === viewName);
   });
+
+  // Mettre à jour le fil d'Ariane (topbar)
+  const viewLabelEl = document.querySelector("#viewLabel");
+  const activeBtn = document.querySelector(`[data-view="${viewName}"]`);
+  if (viewLabelEl && activeBtn) {
+    viewLabelEl.textContent = activeBtn.querySelector("span")?.textContent.trim() || activeBtn.textContent.trim();
+  }
 }
 
 function roleBadgeClass(role) {
@@ -1278,6 +1285,22 @@ function renderAuthShell() {
     sidebarBadge.className = `role-badge ${roleBadgeClass(user.role)}`;
   }
 
+  // Badge de rôle visible dans la sidebar
+  const roleBadgeEl = document.querySelector(".sidebar-role-badge");
+  if (roleBadgeEl) {
+    roleBadgeEl.textContent = roleLabel(user.role);
+    roleBadgeEl.className = `sidebar-role-badge role-${user.role || "guest"}`;
+  }
+
+  // Mettre à jour le label du viewLabel dans la topbar selon la vue active
+  const activeView = document.querySelector(".view.active");
+  if (activeView) {
+    const viewId = activeView.id.replace("view-", "");
+    const activeNav = document.querySelector(`[data-view="${viewId}"]`);
+    const viewLabelEl = document.querySelector("#viewLabel");
+    if (viewLabelEl && activeNav) viewLabelEl.textContent = activeNav.textContent.trim();
+  }
+
   document.querySelectorAll(".nav-item").forEach((button) => {
     const allowed = isViewAllowed(button.dataset.view);
     button.disabled = !allowed;
@@ -1310,11 +1333,11 @@ function renderPermissionStates() {
 function renderLoginUsers() {
   const select = document.querySelector("#mockLoginUser");
   const list = document.querySelector("#mockLoginUsers");
+  if (!select) return;
 
   if (AUTH_MODE_FRONT === "oidc") {
     select.innerHTML = "";
-    list.innerHTML = "";
-    list.hidden = true;
+    if (list) list.hidden = true;
     return;
   }
 
@@ -1332,26 +1355,27 @@ function renderLoginUsers() {
     return "lp-role-student";
   };
 
-  list.hidden = false;
   select.innerHTML = state.users
-    .map((user) => `<option value="${user.id}">${user.fullName} - ${roleLabel(user.role)}</option>`)
+    .map((user) => `<option value="${user.id}">${user.fullName}</option>`)
     .join("");
 
-  list.innerHTML = state.users
-    .map((user) => `
-      <button class="lp-user-card" type="button" data-login-user="${user.id}">
-        <div class="lp-user-av">${initialsFor(user.fullName)}</div>
-        <div class="lp-user-info">
-          <div class="lp-user-name">${user.fullName}</div>
-          <div class="lp-user-meta">
-            <div class="lp-dot ${dotClass(user.role)}"></div>
-            <span class="lp-user-role ${roleClass(user.role)}">${roleLabel(user.role)}</span>
+  if (list) {
+    list.innerHTML = state.users
+      .map((user) => `
+        <button class="mock-user-card" type="button" data-login-user="${user.id}">
+          <div class="mock-av">${initialsFor(user.fullName)}</div>
+          <div class="mock-info">
+            <div class="mock-name">${user.fullName}</div>
+            <div class="mock-meta">
+              <span class="mock-dot ${dotClass(user.role)}"></span>
+              <span class="mock-role ${roleClass(user.role)}">${roleLabel(user.role)}</span>
+            </div>
           </div>
-        </div>
-        <span class="lp-user-arrow">→</span>
-      </button>
-    `)
-    .join("");
+          <svg class="mock-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      `)
+      .join("");
+  }
 }
 
 async function startInstitutionalLogin() {
@@ -1399,7 +1423,9 @@ async function loginAsSelectedUser() {
     await startInstitutionalLogin();
     return;
   }
-  const user = byId(state.users, document.querySelector("#mockLoginUser").value);
+  const select = document.querySelector("#mockLoginUser");
+  if (!select.value && state.users.length > 0) select.value = String(state.users[0].id);
+  const user = byId(state.users, select.value);
   if (!user) return;
   document.body.classList.add("login-leaving");
   window.setTimeout(() => {
@@ -1713,7 +1739,7 @@ function renderSelectors() {
   document.querySelector("#startDate").value ||= "2026-06-17";
   document.querySelector("#endDate").value ||= "2026-06-24";
   const quantityInput = document.querySelector("#quantity");
-  const maxQuantity = can("createGroupRequest", user) ? 20 : 1;
+  const maxQuantity = can("createGroupRequest", user) ? 25 : 1;
   quantityInput.max = maxQuantity;
   if (Number(quantityInput.value || 1) > maxQuantity) quantityInput.value = maxQuantity;
   if (!can("createGroupRequest", user)) quantityInput.value = 1;
@@ -1931,7 +1957,7 @@ async function createRequest(event) {
   const startDate = document.querySelector("#startDate").value;
   const endDate = document.querySelector("#endDate").value;
   const quantity = Number(document.querySelector("#quantity").value);
-  const maxQuantity = can("createGroupRequest", user) ? 20 : 1;
+  const maxQuantity = can("createGroupRequest", user) ? 25 : 1;
   if (quantity > maxQuantity) {
     alert("Action non autorisée pour votre rôle.");
     addEvent("permission_denied", `Quantité ${quantity} refusée pour le rôle ${user.role}.`, {
@@ -2098,9 +2124,9 @@ async function provisionRequest(requestId) {
   const slug = owner.fullName.toLowerCase().split(" ")[0];
   const network = owner.className ? `class-${owner.className.toLowerCase()}` : `class-course-${request.courseId}`;
   const requestedQuantity = Number(request.quantity || 1);
-  const targetQuantity = Math.min(requestedQuantity, 50);
-  if (requestedQuantity > 50) {
-    console.warn(`Demande #${request.id}: ${requestedQuantity} VM demandées, simulation limitée à 50 VM.`);
+  const targetQuantity = Math.min(requestedQuantity, 25);
+  if (requestedQuantity > 25) {
+    console.warn(`Demande #${request.id}: ${requestedQuantity} VM demandées, simulation limitée à 25 VM.`);
   }
   const now = nowDate();
   const startFloor = toDate(request.startDate);
@@ -2137,7 +2163,7 @@ async function provisionRequest(requestId) {
   transitionEntity(request, "active", null);
   request.provisionedAt = formatIsoLocal(demoProvisionedAt);
   refreshLifecycleStatuses();
-  const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitée à ${targetQuantity}/${requestedQuantity} pour la démo.` : "";
+  const cappedMessage = requestedQuantity > targetQuantity ? ` Demande limitée à ${targetQuantity}/${requestedQuantity} VM (max 25 par classe).` : "";
   addEvent("vm_provisioned", `${createdVms.length}/${targetQuantity} VM provisionnée(s) pour la demande #${request.id} (${template.name}, ${owner.className || course.className}).${cappedMessage}`, {
     severity: "success",
     targetType: "request",
@@ -2332,11 +2358,11 @@ document.querySelector("#templateId").addEventListener("change", updateEstimate)
 document.querySelector("#quantity").addEventListener("input", updateEstimate);
 document.querySelector("#startDate").addEventListener("change", updateEstimate);
 document.querySelector("#endDate").addEventListener("change", updateEstimate);
-document.querySelector("#simulateProvisionButton").addEventListener("click", simulateProvisioning);
-document.querySelector("#destroyExpiredButton").addEventListener("click", destroyExpiredVms);
-document.querySelector("#exportRequestsButton").addEventListener("click", exportRequests);
-document.querySelector("#exportVmsButton").addEventListener("click", exportVms);
-document.querySelector("#resetDataButton").addEventListener("click", () => {
+document.querySelector("#simulateProvisionButton")?.addEventListener("click", simulateProvisioning);
+document.querySelector("#destroyExpiredButton")?.addEventListener("click", destroyExpiredVms);
+document.querySelector("#exportRequestsButton")?.addEventListener("click", exportRequests);
+document.querySelector("#exportVmsButton")?.addEventListener("click", exportVms);
+document.querySelector("#resetDataButton")?.addEventListener("click", () => {
   if (!requirePermission("resetData")) return;
   localStorage.removeItem(STORAGE_KEY);
   state = structuredClone(seed);

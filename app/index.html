@@ -1,342 +1,504 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Centre de contrôle Cloud Lab</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffffff'/%3E%3Cpath d='M13 15h11v34H13z' fill='%23e63329'/%3E%3Cpath d='M27 10h11v39H27z' fill='%23f06b2f'/%3E%3Cpath d='M41 15l10-6v40H41z' fill='%23f5b700'/%3E%3C/svg%3E">
+  <title>Cloud Lab — GIT Geneva</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d0d11'/%3E%3Cpath d='M14 46V18h8v28zM28 46V10h8v36zM42 46V22l10-8v32z' fill='%23eeeef8'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=zip-fixed-1">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <aside class="sidebar">
+
+  <!-- ════════════════════════════════════════════
+       SIDEBAR
+  ════════════════════════════════════════════ -->
+  <aside class="sidebar" hidden>
+
     <div class="brand">
-      <span class="brand-mark">GIT</span>
+      <div class="brand-mark">GIT</div>
       <div>
         <strong>Cloud Lab</strong>
         <small>Pilotage des environnements</small>
       </div>
     </div>
+
+    <!-- Navigation — les items non autorisés sont masqués par renderAuthShell() -->
     <nav aria-label="Navigation principale">
-      <button class="nav-item active" data-view="dashboard">Vue d'ensemble</button>
-      <button class="nav-item" data-view="catalog">Cours</button>
-      <button class="nav-item" data-view="request">Nouvelle demande</button>
-      <button class="nav-item" data-view="validation">Demandes à valider</button>
-      <button class="nav-item" data-view="vms">Parc VM</button>
-      <button class="nav-item" data-view="audit">Journal d'audit</button>
+      <button class="nav-item active" data-view="dashboard">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span>Vue d'ensemble</span>
+      </button>
+      <button class="nav-item" data-view="catalog">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Catalogue</span>
+      </button>
+      <button class="nav-item" data-view="request">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <span>Nouvelle demande</span>
+      </button>
+      <button class="nav-item" data-view="validation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Demandes à valider</span>
+      </button>
+      <button class="nav-item" data-view="vms">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span>Parc VM</span>
+      </button>
+      <button class="nav-item" data-view="audit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span>Journal d'audit</span>
+      </button>
     </nav>
 
-    <!-- Profil utilisateur + déconnexion en bas de la sidebar -->
-    <div class="sidebar-user-block" id="sidebarUserBlock">
-      <div class="sidebar-user-info">
-        <div class="sidebar-user-avatar" id="sidebarUserInitials">A</div>
-        <div class="sidebar-user-text">
-          <strong id="sidebarUserName">Administrateur Lab</strong>
-          <small id="sidebarUserEmail">admin@git.swiss</small>
-          <span class="role-badge role-admin" id="sidebarUserBadge">Admin</span>
+    <!-- Bloc utilisateur -->
+    <div class="sidebar-user" id="sidebarUserBlock">
+      <div class="sidebar-user-row">
+        <div class="sidebar-avatar" id="sidebarUserInitials">?</div>
+        <div class="sidebar-user-info">
+          <strong id="sidebarUserName">—</strong>
+          <small id="sidebarUserEmail">—</small>
         </div>
       </div>
-      <button class="sidebar-logout-btn" id="logoutButton" type="button" title="Se déconnecter">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="16" height="16">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+      <div class="sidebar-role-badge" id="sidebarUserBadge"></div>
+      <button class="logout-btn" id="logoutButton" type="button" aria-label="Se déconnecter">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Se déconnecter
       </button>
     </div>
 
-    <div class="sidebar-note">
-      <strong>Session pilote</strong>
-      <span>Tout est prêt pour rejouer le parcours de démo sans dépendance externe.</span>
+    <div class="sidebar-env">
+      <span class="env-dot"></span>
+      <span>dc4-a · OpenStack</span>
     </div>
-  </aside>
 
+  </aside><!-- /sidebar -->
+
+  <!-- ════════════════════════════════════════════
+       SHELL
+  ════════════════════════════════════════════ -->
   <main class="shell">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">Geneva Institute of Technology · Infomaniak Public Cloud · OpenStack</div>
-        <h1>Ravi de vous revoir</h1>
-        <p>Suivez les environnements de cours, les coûts et les machines proches de leur échéance.</p>
-      </div>
-      <div class="user-chip">
-        <div class="avatar" id="currentUserInitials" aria-hidden="true"><span>A</span></div>
-        <div>
-          <strong id="currentUserName">Administrateur Lab</strong>
-          <small id="currentUserRole">admin@git.swiss</small>
-          <span class="role-badge role-admin" id="currentUserBadge">Admin</span>
+
+    <!-- Topbar -->
+    <header class="topbar" hidden>
+      <nav class="topbar-crumb" aria-label="Fil d'Ariane">
+        <span>Cloud Lab</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+        <b id="viewLabel">Vue d'ensemble</b>
+      </nav>
+      <div class="topbar-right">
+        <div class="status-pill">
+          <span class="status-dot"></span>
+          <span>Opérationnel</span>
+        </div>
+        <div class="user-chip">
+          <div class="user-chip-av" id="currentUserInitials"><span>?</span></div>
+          <span id="currentUserName">—</span>
+          <!-- cachés, lus par le JS pour la logique -->
+          <span id="currentUserRole" hidden></span>
+          <span id="currentUserBadge" hidden></span>
         </div>
       </div>
     </header>
 
-    <section class="ops-strip" aria-label="Etat operationnel">
-      <div class="ops-item">
-        <span>Environnement</span>
-        <strong>Pilote prêt</strong>
-      </div>
-      <div class="ops-item">
-        <span>Cloud</span>
-        <strong>Infomaniak OpenStack</strong>
-      </div>
-      <div class="ops-item">
-        <span>Parcours</span>
-        <strong>Demande -> VM -> fin de vie</strong>
-      </div>
-      <div class="ops-item">
-        <span>Règle clé</span>
-        <strong>Aucune VM sans date de fin</strong>
-      </div>
-    </section>
+    <!-- Ops strip -->
+    <div class="ops-strip" hidden aria-label="État opérationnel">
+      <div class="ops-item"><span>Env</span><strong>Pilote · prêt</strong></div>
+      <div class="ops-item"><span>Cloud</span><strong>Infomaniak OpenStack</strong></div>
+      <div class="ops-item"><span>Parcours</span><strong>Demande → VM → fin de vie</strong></div>
+      <div class="ops-item"><span>Règle</span><strong>Aucune VM sans date de fin</strong></div>
+    </div>
 
-    <section class="view login-view" id="view-login">
-      <div class="lp-card">
-        <div class="lp-logo-wrap">
-          <div class="lp-logo-box">GIT</div>
-          <span class="lp-logo-name">Cloud Lab</span>
+    <!-- ──────────────────────────────────────────
+         CONTENT
+    ────────────────────────────────────────── -->
+    <div class="content">
+
+      <!-- ══ LOGIN ══════════════════════════════ -->
+      <section class="view login-view" id="view-login" aria-label="Connexion">
+        <div class="login-layout">
+
+          <!-- Panneau gauche : formulaire -->
+          <div class="login-panel">
+            <div class="login-logo-row">
+              <div class="login-logo-mark">GIT</div>
+              <span class="login-logo-name">Cloud Lab</span>
+            </div>
+
+            <div class="login-body">
+              <h1 class="login-h1">Connexion</h1>
+              <p class="login-p">Accédez à la plateforme avec votre compte institutionnel GIT.</p>
+
+              <!-- Bouton principal MS365 -->
+              <button class="ms365-btn" id="mockMicrosoftLoginButton" type="button">
+                <svg width="20" height="20" viewBox="0 0 22 22" aria-hidden="true" focusable="false">
+                  <rect x="1"  y="1"  width="9" height="9" rx="1" fill="#f25022"/>
+                  <rect x="12" y="1"  width="9" height="9" rx="1" fill="#7fba00"/>
+                  <rect x="1"  y="12" width="9" height="9" rx="1" fill="#00a4ef"/>
+                  <rect x="12" y="12" width="9" height="9" rx="1" fill="#ffb900"/>
+                </svg>
+                Continuer avec Microsoft 365
+              </button>
+
+              <!-- Formulaire credentials caché — requis par le JS -->
+              <form class="cred-form" id="credentialLoginForm" novalidate style="display:none" aria-hidden="true">
+                <input type="email" id="credentialEmail" autocomplete="username">
+                <input type="password" id="credentialPassword" autocomplete="current-password" minlength="3">
+                <button type="submit" class="credential-submit"></button>
+              </form>
+            </div>
+
+            <!-- Accès rapide — peuplé par renderLoginUsers() -->
+            <div class="mock-divider">
+              <div class="sep-line"></div>
+              <span>Accès rapide</span>
+              <div class="sep-line"></div>
+            </div>
+            <div id="mockLoginUsers" class="mock-users-list"></div>
+            <select id="mockLoginUser" hidden aria-hidden="true"></select>
+          </div>
+
+
+
         </div>
-        <h1 class="lp-title">Se connecter</h1>
-        <p class="lp-sub">Utilisez votre compte institutionnel<br>Geneva Institute of Technology.</p>
+      </section><!-- /view-login -->
 
-        <button class="lp-ms-btn" id="mockMicrosoftLoginButton" type="button">
-          <svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true" focusable="false">
-            <rect x="1"  y="1"  width="9" height="9" rx="1" fill="#f25022"></rect>
-            <rect x="12" y="1"  width="9" height="9" rx="1" fill="#7fba00"></rect>
-            <rect x="1"  y="12" width="9" height="9" rx="1" fill="#00a4ef"></rect>
-            <rect x="12" y="12" width="9" height="9" rx="1" fill="#ffb900"></rect>
-          </svg>
-          Continuer avec Microsoft 365
-        </button>
+      <!-- ══ DASHBOARD ══════════════════════════ -->
+      <section class="view" id="view-dashboard">
+        <!-- Rempli par renderDashboardCommandCenter() + renderKpis() -->
+        <div id="dashboardCommandCenter"></div>
+        <div class="kpi-grid" id="kpiGrid"></div>
 
-        <div class="lp-divider">
-          <div class="lp-div-line"></div>
-          <span class="lp-div-label">Accès rapide démo</span>
-          <div class="lp-div-line"></div>
+        <div class="dash-grid">
+          <section class="panel">
+            <div class="panel-hd"><h3>Alertes actives</h3></div>
+            <div id="alertsList" class="list-body"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-hd"><h3>Budget par cours</h3></div>
+            <div id="courseCosts" class="list-body"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-hd"><h3>Cycle de vie</h3></div>
+            <div id="lifecycleList" class="list-body"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-hd"><h3>Activité récente</h3></div>
+            <div id="eventsList" class="list-body"></div>
+          </section>
         </div>
 
-        <div class="lp-users" id="mockLoginUsers"></div>
-        <select id="mockLoginUser" hidden aria-hidden="true"></select>
+        <section class="panel" style="margin-bottom:24px">
+          <div class="panel-hd">
+            <h3>Garanties données</h3>
+            <p>Contrôles de conformité métier en temps réel.</p>
+          </div>
+          <div id="dataControlsList" class="proof-grid"></div>
+        </section>
 
-        <!-- Formulaire credentials JWT caché (fallback API mode) -->
-        <form class="credential-login-form" id="credentialLoginForm" novalidate style="display:none;">
-          <div class="credential-fields">
-            <label class="login-field-label" for="credentialEmail">
-              Adresse e-mail
-              <input type="email" id="credentialEmail" spellcheck="false" required placeholder="prenom.nom@git.swiss" autocomplete="username">
+        <!-- ══ MONITORING GRAFANA ══════════════════════════ -->
+        <section class="panel grafana-panel" style="margin-bottom:24px">
+          <div class="panel-hd grafana-hd">
+            <div class="grafana-hd-left">
+              <div class="grafana-dot"></div>
+              <h3>Monitoring — Infomaniak OpenStack</h3>
+            </div>
+            <div class="grafana-hd-right">
+              <span class="grafana-badge">Grafana</span>
+              <a class="btn-ghost grafana-open-btn"
+                 href="http://localhost:3000"
+                 target="_blank" rel="noopener"
+                 title="Ouvrir Grafana dans un nouvel onglet">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Ouvrir
+              </a>
+            </div>
+          </div>
+          <div class="grafana-frame-wrap">
+            <iframe
+              id="grafanaFrame"
+              src="http://localhost:3000/d/cloudlab/cloud-lab-overview?orgId=1&refresh=30s&theme=dark&kiosk"
+              title="Grafana — Cloud Lab Monitoring"
+              allowfullscreen
+              loading="lazy">
+            </iframe>
+            <div class="grafana-offline" id="grafanaOffline">
+              <div class="grafana-offline-inner">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h3l2-6 4 12 2-6h5"/><circle cx="12" cy="12" r="10" stroke-dasharray="4 2"/></svg>
+                <p>Grafana non disponible</p>
+                <small>Démarrez Grafana sur <code>localhost:3000</code><br>ou configurez l'URL dans le panneau ci-dessous.</small>
+                <button class="btn-ghost grafana-config-btn" onclick="document.getElementById('grafanaConfig').classList.toggle('grafana-config-open')">
+                  Configurer l'URL
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="grafana-config" id="grafanaConfig">
+            <label class="grafana-config-label">
+              URL Grafana
+              <div class="grafana-config-row">
+                <input type="url" id="grafanaUrl"
+                  value="http://localhost:3000/d/cloudlab/cloud-lab-overview?orgId=1&refresh=30s&theme=dark&kiosk"
+                  placeholder="http://your-grafana:3000/d/...">
+                <button class="btn-primary grafana-apply-btn" onclick="applyGrafanaUrl()">Appliquer</button>
+              </div>
             </label>
-            <label class="login-field-label" for="credentialPassword">
-              Mot de passe
-              <input type="password" id="credentialPassword" required minlength="3" placeholder="••••••••" autocomplete="current-password">
+          </div>
+        </section>
+
+      </section>
+
+      <!-- ══ CATALOGUE ══════════════════════════ -->
+      <section class="view" id="view-catalog">
+        <div class="view-hd">
+          <div>
+            <h2>Catalogue</h2>
+            <p>Environnements pré-configurés disponibles pour vos cours.</p>
+          </div>
+        </div>
+        <div class="template-grid" id="templateGrid"></div>
+      </section>
+
+      <!-- ══ NOUVELLE DEMANDE ═══════════════════ -->
+      <section class="view" id="view-request">
+        <div class="view-hd">
+          <div>
+            <h2>Nouvelle demande</h2>
+            <p>Sélectionnez un template, définissez la durée et soumettez pour validation.</p>
+          </div>
+        </div>
+        <form class="panel form-panel" id="requestForm" novalidate>
+          <div class="form-grid">
+            <label class="form-field">
+              <span class="field-lbl">Demandeur</span>
+              <select id="requesterId" required></select>
             </label>
-            <button type="submit" class="lp-ms-btn" style="margin-bottom:0;">Se connecter</button>
+            <label class="form-field">
+              <span class="field-lbl">Template de cours</span>
+              <select id="templateId" required></select>
+            </label>
+            <label class="form-field">
+              <span class="field-lbl">Quantité</span>
+              <input type="number" id="quantity" min="1" max="25" value="1" required>
+            </label>
+            <div></div>
+            <label class="form-field">
+              <span class="field-lbl">Date de début</span>
+              <input type="date" id="startDate" required>
+            </label>
+            <label class="form-field">
+              <span class="field-lbl">Date de fin <em>(obligatoire)</em></span>
+              <input type="date" id="endDate" required>
+            </label>
+            <label class="form-field wide">
+              <span class="field-lbl">Justification</span>
+              <textarea id="requestReason" rows="3"
+                placeholder="Ex : cours Administration Linux — semaine 3" required></textarea>
+            </label>
+          </div>
+          <div class="estimate" id="requestEstimate">Coût estimé : —</div>
+          <div class="form-actions">
+            <button type="button" class="btn-ghost" onclick="setView('catalog')">Annuler</button>
+            <button type="submit" class="btn-primary">Soumettre la demande</button>
           </div>
         </form>
+      </section>
 
-        <p class="lp-foot">Comptes autorisés · <b>@git.swiss</b></p>
-      </div>
-    </section>
-
-    <section class="view active" id="view-dashboard">
-      <div class="section-head">
-        <div>
-          <h2>Ce qui demande votre attention</h2>
-          <p>Les demandes, les coûts et les alertes importantes sont regroupés ici.</p>
-        </div>
-        <div class="quick-actions">
-          <span>Actions rapides</span>
-          <div class="actions">
-            <button class="ghost-button" id="exportRequestsButton">Demandes CSV</button>
-            <button class="ghost-button" id="exportVmsButton">VM CSV</button>
-            <button class="ghost-button" id="resetDataButton">Réinitialiser</button>
+      <!-- ══ VALIDATION / MES DEMANDES ═════════ -->
+      <section class="view" id="view-validation">
+        <div class="view-hd">
+          <div>
+            <h2>Demandes à valider</h2>
+            <p>Approuvez ou refusez avec le coût estimé visible.</p>
+          </div>
+          <div class="hd-actions">
+            <button class="btn-ghost" id="exportRequestsButton">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+            <button class="btn-ghost btn-ghost-danger" id="resetDataButton">Réinitialiser</button>
           </div>
         </div>
-      </div>
-      <div id="dashboardCommandCenter" class="dashboard-command-center"></div>
-      <div class="kpi-grid" id="kpiGrid"></div>
-      <section class="panel live-flow">
-          <h3>Parcours suivi pendant la démo</h3>
-        <div class="flow-steps">
-          <div><span>1</span><strong>Demande</strong><small>besoin + échéance</small></div>
-          <div><span>2</span><strong>Validation</strong><small>décision rapide</small></div>
-          <div><span>3</span><strong>Provisionnement</strong><small>création cloud</small></div>
-          <div><span>4</span><strong>Configuration</strong><small>outils prêts</small></div>
-          <div><span>5</span><strong>Supervision</strong><small>suivi et coûts</small></div>
-          <div><span>6</span><strong>Fin de vie</strong><small>nettoyage maîtrisé</small></div>
-        </div>
-      </section>
-      <div class="grid-two">
         <section class="panel">
-          <h3>Alertes</h3>
-          <div id="alertsList" class="list"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Demandeur</th>
+                  <th>Cours</th>
+                  <th>Template</th>
+                  <th>Qté</th>
+                  <th>Période</th>
+                  <th>Coût estimé</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="requestsTable"></tbody>
+            </table>
+          </div>
         </section>
+      </section>
+
+      <!-- ══ PARC VM ════════════════════════════ -->
+      <section class="view" id="view-vms">
+        <div class="view-hd">
+          <div>
+            <h2>Parc VM</h2>
+            <p>Machines provisionnées, statuts, réseaux et dates de fin.</p>
+          </div>
+          <div class="hd-actions">
+            <button class="btn-ghost" id="simulateProvisionButton">Provisionner</button>
+            <button class="btn-ghost btn-ghost-danger" id="destroyExpiredButton">Détruire expirées</button>
+            <button class="btn-ghost" id="exportVmsButton">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+          </div>
+        </div>
         <section class="panel">
-          <h3>Budget par cours</h3>
-          <div id="courseCosts" class="list"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>VM</th>
+                  <th>Propriétaire</th>
+                  <th>IP</th>
+                  <th>Statut</th>
+                  <th>Réseau</th>
+                  <th>Fin</th>
+                  <th>Coût réel</th>
+                  <th>CHF/h</th>
+                </tr>
+              </thead>
+              <tbody id="vmsTable"></tbody>
+            </table>
+          </div>
         </section>
-      </div>
-      <div class="grid-two">
+      </section>
+
+      <!-- ══ JOURNAL D'AUDIT ════════════════════ -->
+      <section class="view" id="view-audit">
+        <div class="view-hd">
+          <div>
+            <h2>Journal d'audit</h2>
+            <p>Historique complet des actions, rôles et événements système.</p>
+          </div>
+          <div class="hd-actions audit-filters">
+            <select id="auditTypeFilter" aria-label="Filtrer par type"></select>
+            <select id="auditSeverityFilter" aria-label="Filtrer par gravité"></select>
+            <select id="auditActorFilter" aria-label="Filtrer par acteur"></select>
+          </div>
+        </div>
         <section class="panel">
-          <h3>État du cycle</h3>
-          <div id="lifecycleList" class="list"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Horodatage</th>
+                  <th>Acteur</th>
+                  <th>Rôle</th>
+                  <th>Gravité</th>
+                  <th>Type</th>
+                  <th>Cible</th>
+                  <th>Détail</th>
+                </tr>
+              </thead>
+              <tbody id="auditTable"></tbody>
+            </table>
+          </div>
         </section>
-        <section class="panel">
-          <h3>Dernieres actions</h3>
-          <div id="eventsList" class="list"></div>
-        </section>
-      </div>
-      <section class="panel data-proof">
-        <div>
-          <h3>Garanties données pour la revue</h3>
-          <p>Ces contrôles prouvent que le prototype suit les règles métier : dates de fin, coûts, transitions et nettoyage.</p>
-        </div>
-        <div id="dataControlsList" class="proof-grid"></div>
       </section>
-    </section>
 
-    <section class="view" id="view-catalog">
-      <div class="section-head">
-        <div>
-          <h2>Catalogue des cours</h2>
-          <p>Choisissez un environnement prêt à lancer pour un module ou un atelier.</p>
-        </div>
+    </div><!-- /content -->
+
+    <!-- Barre de statut terminal -->
+    <div class="term-bar" id="termBar" hidden aria-hidden="true">
+      <span class="t-mono t-dim" id="termClock">00:00:00</span>
+      <span class="t-sep">·</span>
+      <span class="t-mono t-green" id="termActive">— VMs actives</span>
+      <span class="t-sep">·</span>
+      <span class="t-mono t-dim">infomaniak-dc4-a · OpenStack</span>
+      <div class="t-right">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        <span class="t-green">Système OK</span>
       </div>
-      <div class="template-grid" id="templateGrid"></div>
-    </section>
+    </div>
 
-    <section class="view" id="view-request">
-      <div class="section-head">
-        <div>
-          <h2>Préparer un nouvel environnement</h2>
-          <p>Choisissez le cours, la durée et le volume de machines nécessaire.</p>
-        </div>
-      </div>
-      <form class="panel form-panel" id="requestForm">
-        <div class="form-grid">
-          <label>
-            Demandeur
-            <select id="requesterId" required></select>
-          </label>
-          <label>
-            Modèle
-            <select id="templateId" required></select>
-          </label>
-          <label>
-            Quantité
-            <input type="number" id="quantity" min="1" max="20" value="1" required>
-          </label>
-          <label>
-            Date de début
-            <input type="date" id="startDate" required>
-          </label>
-          <label>
-            Date de fin
-            <input type="date" id="endDate" required>
-          </label>
-          <label class="wide">
-            Raison de la demande
-            <textarea id="requestReason" rows="3" placeholder="Ex. : TP Linux, projet web, atelier données..." required></textarea>
-          </label>
-        </div>
-        <div class="estimate" id="requestEstimate">Coût estimé : -</div>
-        <button class="primary-button" type="submit">Créer la demande</button>
-      </form>
-    </section>
+  </main><!-- /shell -->
 
-    <section class="view" id="view-validation">
-      <div class="section-head">
-        <div>
-          <h2>Demandes à valider</h2>
-          <p>Décidez avec le coût estimé et l’échéance sous les yeux.</p>
-        </div>
-      </div>
-      <section class="panel">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Demandeur</th>
-                <th>Cours</th>
-                <th>Modèle</th>
-                <th>Quantité</th>
-                <th>Dates</th>
-                <th>Coût estimé</th>
-                <th>Statut</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="requestsTable"></tbody>
-          </table>
-        </div>
-      </section>
-    </section>
+  <!-- ══ SCRIPTS ══════════════════════════════ -->
+  <script>
+  (function () {
+    /* Clock */
+    function tick() {
+      var el = document.getElementById('termClock');
+      if (!el) return;
+      var d = new Date(), p = function(n){ return String(n).padStart(2,'0'); };
+      el.textContent = p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    }
+    setInterval(tick, 1000);
+    tick();
 
-    <section class="view" id="view-vms">
-      <div class="section-head">
-        <div>
-          <h2>Parc des machines virtuelles</h2>
-          <p>Retrouvez les machines provisionnées, leur statut, leur réseau et leur date de fin.</p>
-        </div>
-        <div class="actions">
-          <button class="ghost-button" id="simulateProvisionButton">Provisionner une demande approuvée</button>
-          <button class="ghost-button" id="destroyExpiredButton">Marquer les VM expirées comme détruites</button>
-        </div>
-      </div>
-      <section class="panel">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>VM</th>
-                <th>Proprietaire</th>
-                <th>IP</th>
-                <th>Statut</th>
-                <th>Réseau</th>
-                <th>Fin</th>
-                <th>Coût réel</th>
-                <th>Coût/h</th>
-              </tr>
-            </thead>
-            <tbody id="vmsTable"></tbody>
-          </table>
-        </div>
-      </section>
-    </section>
+    /* Grafana URL configurée par l'utilisateur */
+    window.applyGrafanaUrl = function () {
+      var url = document.getElementById('grafanaUrl').value.trim();
+      if (!url) return;
+      var frame = document.getElementById('grafanaFrame');
+      frame.src = url;
+      document.getElementById('grafanaConfig').classList.remove('grafana-config-open');
+    };
 
-    <section class="view" id="view-audit">
-      <div class="section-head">
-        <div>
-          <h2>Journal d'audit</h2>
-          <p>Historique complet des actions, acteurs, rôles et tentatives refusées.</p>
-        </div>
-        <div class="actions audit-filters">
-          <select id="auditTypeFilter" aria-label="Filtrer par type"></select>
-          <select id="auditSeverityFilter" aria-label="Filtrer par gravité"></select>
-          <select id="auditActorFilter" aria-label="Filtrer par acteur"></select>
-        </div>
-      </div>
-      <section class="panel">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Acteur</th>
-                <th>Rôle</th>
-                <th>Gravité</th>
-                <th>Type</th>
-                <th>Cible</th>
-                <th>Detail</th>
-              </tr>
-            </thead>
-            <tbody id="auditTable"></tbody>
-          </table>
-        </div>
-      </section>
-    </section>
+    /* Détection iframe Grafana loaded / offline */
+    window.addEventListener('load', function () {
+      var frame = document.getElementById('grafanaFrame');
+      var panel = frame ? frame.closest('.grafana-panel') : null;
+      var overlay = document.getElementById('grafanaOffline');
+      if (!frame) return;
 
-  </main>
+      // Tentative de détection de chargement
+      frame.addEventListener('load', function () {
+        try {
+          // Si même origine, pas d'erreur → live
+          if (panel) panel.classList.add('is-live');
+          if (overlay) overlay.classList.add('hidden');
+        } catch (e) {
+          // Cross-origin — on suppose que l'iframe a chargé quand même
+          if (panel) panel.classList.add('is-live');
+          if (overlay) overlay.classList.add('hidden');
+        }
+      });
 
-  <script src="script.js?v=zip-fixed-1"></script>
+      frame.addEventListener('error', function () {
+        if (panel) panel.classList.remove('is-live');
+        if (overlay) overlay.classList.remove('hidden');
+      });
+    });
+
+    /* Toast */
+    window.showToast = function (msg, type) {
+      var t = document.createElement('div');
+      t.className = 'toast' + (type === 'error' ? ' toast-error' : '');
+      t.textContent = msg;
+      document.body.appendChild(t);
+      requestAnimationFrame(function () { t.classList.add('toast-show'); });
+      setTimeout(function () {
+        t.classList.remove('toast-show');
+        setTimeout(function () { t.remove(); }, 220);
+      }, 3000);
+    };
+
+    /* Term bar visibility */
+    var obs = new MutationObserver(function () {
+      var bar = document.getElementById('termBar');
+      if (bar) bar.hidden = !document.body.classList.contains('is-authenticated');
+    });
+    obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }());
+  </script>
+  <script src="script.js"></script>
 </body>
 </html>
-
