@@ -29,7 +29,7 @@ class OpenStackService:
         self.settings = get_settings()
 
     async def create_vms(self, request: VmRequest, template: VmTemplate, owner: User) -> list[OpenStackVm]:
-        self._validate_settings()
+        self._validate_create_settings()
         async with httpx.AsyncClient(timeout=60) as client:
             token, catalog = await self._authenticate(client)
             compute_url = self._endpoint(catalog, "compute")
@@ -74,7 +74,7 @@ class OpenStackService:
     async def destroy_vm(self, provider_vm_id: str | None) -> bool:
         if not provider_vm_id:
             return False
-        self._validate_settings()
+        self._validate_auth_settings()
         async with httpx.AsyncClient(timeout=60) as client:
             token, catalog = await self._authenticate(client)
             compute_url = self._endpoint(catalog, "compute")
@@ -86,7 +86,7 @@ class OpenStackService:
                 raise ApiError(500, "openstack_delete_failed", self._error_message(response))
             return True
 
-    def _validate_settings(self) -> None:
+    def _validate_auth_settings(self) -> None:
         missing = [
             name
             for name, value in {
@@ -99,6 +99,9 @@ class OpenStackService:
         ]
         if missing:
             raise ApiError(500, "openstack_config_missing", f"Configuration OpenStack incomplete: {', '.join(missing)}.")
+
+    def _validate_create_settings(self) -> None:
+        self._validate_auth_settings()
         if not (self.settings.openstack_network_id or self.settings.openstack_network_name):
             raise ApiError(500, "openstack_network_missing", "Configure OPENSTACK_NETWORK_ID ou OPENSTACK_NETWORK_NAME.")
 

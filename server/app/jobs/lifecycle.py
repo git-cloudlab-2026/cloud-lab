@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,18 +8,20 @@ from app.domain.enums import AuditSeverity, NotificationType, VmStatus
 from app.domain.models import Notification, User, VirtualMachine
 from app.services.audit_service import AuditService
 from app.services.notification_service import NotificationService
+from app.services.provisioner import get_provisioner
 
 
 class VmLifecycleJob:
-    """Tache data: detecte les VM arrivees en fin de vie sans toucher a l'infra."""
+    """Tache de cycle de vie: alertes 24h et destruction des VM arrivees a date de fin."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
         self.audit_service = AuditService(session)
         self.notification_service = NotificationService(session)
+        self.provisioner = get_provisioner()
 
     async def mark_expired_vms(self, today: date | None = None) -> list[VirtualMachine]:
-        current_date = today or date.today()
+        current_date = today or datetime.now(ZoneInfo("Europe/Zurich")).date()
         result = await self.session.execute(
             select(VirtualMachine).where(
                 VirtualMachine.end_date <= current_date,
@@ -45,8 +48,77 @@ class VmLifecycleJob:
         await self.session.flush()
         return vms
 
+    async def destroy_due_vms(self, today: date | None = None) -> list[VirtualMachine]:
+        """Detruit reellement les VM dont la date de fin est atteinte.
+
+        La destruction passe par le provisioner actif, donc le comportement est le
+        meme que le bouton "Detruire" du portail.
+        """
+        current_date = today or datetime.now(ZoneInfo("Europe/Zurich")).date()
+        result = await self.session.execute(
+            select(VirtualMachine).where(
+                VirtualMachine.end_date <= current_date,
+                VirtualMachine.status.in_([VmStatus.running, VmStatus.stopped, VmStatus.expired]),
+            )
+        )
+        vms = list(result.scalars().all())
+        destroyed: list[VirtualMachine] = []
+
+        for vm in vms:
+            if not vm.provider_vm_id:
+                vm.status = VmStatus.error
+                self.audit_service.record(
+                    "vm_auto_destroy_failed",
+                    f"Destruction automatique impossible pour {vm.name}: provider_vm_id manquant.",
+                    severity=AuditSeverity.danger,
+                    vm_id=vm.id,
+                )
+                await self.session.commit()
+                continue
+
+            vm.status = VmStatus.down
+            self.audit_service.record(
+                "vm_auto_destroy_started",
+                f"Destruction automatique lancee pour {vm.name} arrivee a date de fin.",
+                severity=AuditSeverity.warning,
+                vm_id=vm.id,
+            )
+            await self.session.commit()
+
+            try:
+                await self.provisioner.destroy_vm(vm.provider_vm_id)
+            except Exception as exc:
+                vm.status = VmStatus.error
+                self.audit_service.record(
+                    "vm_auto_destroy_failed",
+                    f"Destruction automatique echouee pour {vm.name}: {str(exc)[:500]}",
+                    severity=AuditSeverity.danger,
+                    vm_id=vm.id,
+                )
+                await self.session.commit()
+                continue
+
+            vm.status = VmStatus.destroyed
+            vm.destroyed_at = datetime.now(timezone.utc)
+            self.audit_service.record(
+                "vm_auto_destroyed",
+                f"VM {vm.name} detruite automatiquement a sa date de fin.",
+                severity=AuditSeverity.danger,
+                vm_id=vm.id,
+            )
+            self.notification_service.create(
+                vm.owner_id,
+                NotificationType.vm_destroyed,
+                "VM detruite automatiquement",
+                f"La VM {vm.name} a ete detruite automatiquement a sa date de fin.",
+            )
+            await self.session.commit()
+            destroyed.append(vm)
+
+        return destroyed
+
     async def notify_expiring_soon_vms(self, today: date | None = None) -> list[VirtualMachine]:
-        current_date = today or date.today()
+        current_date = today or datetime.now(ZoneInfo("Europe/Zurich")).date()
         target_date = current_date + timedelta(days=1)
         result = await self.session.execute(
             select(VirtualMachine).where(
@@ -96,5 +168,5 @@ class VmLifecycleJob:
 
     async def run(self, today: date | None = None) -> dict[str, int]:
         expiring_soon = await self.notify_expiring_soon_vms(today)
-        expired = await self.mark_expired_vms(today)
-        return {"expiring_soon": len(expiring_soon), "expired": len(expired)}
+        destroyed = await self.destroy_due_vms(today)
+        return {"expiring_soon": len(expiring_soon), "destroyed": len(destroyed)}

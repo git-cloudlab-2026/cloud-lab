@@ -16,9 +16,9 @@ async def run_lifecycle_job() -> None:
         result = await VmLifecycleJob(session).run()
         await session.commit()
         logger.info(
-            "Lifecycle job finished: %s expiring soon, %s expired",
+            "Lifecycle job finished: %s expiring soon, %s destroyed",
             result["expiring_soon"],
-            result["expired"],
+            result["destroyed"],
         )
 
 
@@ -39,8 +39,8 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
-    # Extinction nuit/week-end: garde-fou planifie, l'action infra reste volontairement
-    # separee tant que Terraform/Ansible ne sont pas valides en production.
+    # Extinction nuit/week-end: second passage planifie pour appliquer les fins de vie
+    # meme si le passage horaire a ete manque.
     scheduler.add_job(
         run_lifecycle_job,
         "cron",
