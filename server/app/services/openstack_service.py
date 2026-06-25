@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,8 +7,6 @@ import httpx
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.domain.models import User, VmRequest, VmTemplate
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,8 +30,8 @@ class OpenStackService:
         async with httpx.AsyncClient(timeout=60) as client:
             token, catalog = await self._authenticate(client)
             compute_url = self._endpoint(catalog, "compute")
-            image_url = self._endpoint(catalog, "image")
-            network_url = self._endpoint(catalog, "network")
+            image_url = self._versioned_url(self._endpoint(catalog, "image"), "v2")
+            network_url = self._versioned_url(self._endpoint(catalog, "network"), "v2.0")
 
             image_id = await self._find_image_id(client, token, image_url, self.settings.terraform_image_name)
             flavor_id = await self._find_flavor_id(client, token, compute_url, self.settings.terraform_default_flavor_name)
@@ -53,11 +50,14 @@ class OpenStackService:
                     network_id=network_id,
                 )
                 server = await self._wait_for_server(client, token, compute_url, server["id"])
+                ip_address = self._first_private_ip(server)
+                if self.settings.terraform_assign_floating_ip:
+                    ip_address = await self._assign_floating_ip(client, token, network_url, server["id"])
                 created.append(
                     OpenStackVm(
                         provider_vm_id=server["id"],
                         name=server.get("name") or name,
-                        ip_address=self._first_private_ip(server),
+                        ip_address=ip_address,
                         ssh_username="student" if owner.role.value == "student" else "trainer",
                         ssh_key_fingerprint=self.settings.openstack_keypair_name,
                         network_segment=self._network_segment(owner),
@@ -78,10 +78,7 @@ class OpenStackService:
         async with httpx.AsyncClient(timeout=60) as client:
             token, catalog = await self._authenticate(client)
             compute_url = self._endpoint(catalog, "compute")
-            response = await client.delete(
-                f"{compute_url}/servers/{provider_vm_id}",
-                headers={"X-Auth-Token": token},
-            )
+            response = await client.delete(f"{compute_url}/servers/{provider_vm_id}", headers={"X-Auth-Token": token})
             if response.status_code not in {202, 204, 404}:
                 raise ApiError(500, "openstack_delete_failed", self._error_message(response))
             return True
@@ -104,9 +101,13 @@ class OpenStackService:
         self._validate_auth_settings()
         if not (self.settings.openstack_network_id or self.settings.openstack_network_name):
             raise ApiError(500, "openstack_network_missing", "Configure OPENSTACK_NETWORK_ID ou OPENSTACK_NETWORK_NAME.")
+        if not self.settings.openstack_keypair_name:
+            raise ApiError(500, "openstack_keypair_missing", "Configure OPENSTACK_KEYPAIR_NAME.")
 
     async def _authenticate(self, client: httpx.AsyncClient) -> tuple[str, list[dict[str, Any]]]:
-        url = self.settings.os_auth_url.rstrip("/") + "/auth/tokens"
+        auth_url = self.settings.os_auth_url.rstrip("/")
+        if not auth_url.endswith("/v3"):
+            auth_url = f"{auth_url}/v3"
         payload = {
             "auth": {
                 "identity": {
@@ -127,11 +128,10 @@ class OpenStackService:
                 },
             }
         }
-        response = await client.post(url, json=payload)
+        response = await client.post(f"{auth_url}/auth/tokens", json=payload)
         if response.status_code != 201:
             raise ApiError(401, "openstack_auth_failed", self._error_message(response))
-        token = response.headers["X-Subject-Token"]
-        return token, response.json()["token"]["catalog"]
+        return response.headers["X-Subject-Token"], response.json()["token"]["catalog"]
 
     def _endpoint(self, catalog: list[dict[str, Any]], service_type: str) -> str:
         for service in catalog:
@@ -147,11 +147,17 @@ class OpenStackService:
                 return endpoints[0]["url"].rstrip("/")
         raise ApiError(500, "openstack_endpoint_missing", f"Endpoint OpenStack public introuvable: {service_type}.")
 
+    def _versioned_url(self, base_url: str, version: str) -> str:
+        base_url = base_url.rstrip("/")
+        if base_url.endswith(f"/{version}"):
+            return base_url
+        return f"{base_url}/{version}"
+
     async def _find_image_id(self, client: httpx.AsyncClient, token: str, image_url: str, image_name: str | None) -> str:
         if not image_name:
             raise ApiError(500, "openstack_image_missing", "TERRAFORM_IMAGE_NAME doit contenir le nom de l'image.")
         response = await client.get(
-            f"{image_url}/v2/images",
+            f"{image_url}/images",
             params={"name": image_name, "status": "active"},
             headers={"X-Auth-Token": token},
         )
@@ -177,7 +183,7 @@ class OpenStackService:
         if self.settings.openstack_network_id:
             return self.settings.openstack_network_id
         response = await client.get(
-            f"{network_url}/v2.0/networks",
+            f"{network_url}/networks",
             params={"name": self.settings.openstack_network_name},
             headers={"X-Auth-Token": token},
         )
@@ -187,6 +193,67 @@ class OpenStackService:
         if not networks:
             raise ApiError(404, "openstack_network_not_found", f"Reseau OpenStack introuvable: {self.settings.openstack_network_name}.")
         return networks[0]["id"]
+
+    async def _resolve_external_network_id(self, client: httpx.AsyncClient, token: str, network_url: str) -> str:
+        response = await client.get(
+            f"{network_url}/networks",
+            params={"name": self.settings.terraform_external_network_name},
+            headers={"X-Auth-Token": token},
+        )
+        if response.status_code != 200:
+            raise ApiError(500, "openstack_external_network_lookup_failed", self._error_message(response))
+        networks = response.json().get("networks", [])
+        if not networks:
+            raise ApiError(
+                404,
+                "openstack_external_network_not_found",
+                f"Reseau externe OpenStack introuvable: {self.settings.terraform_external_network_name}.",
+            )
+        return networks[0]["id"]
+
+    async def _find_server_port_id(self, client: httpx.AsyncClient, token: str, network_url: str, server_id: str) -> str:
+        response = await client.get(
+            f"{network_url}/ports",
+            params={"device_id": server_id},
+            headers={"X-Auth-Token": token},
+        )
+        if response.status_code != 200:
+            raise ApiError(500, "openstack_port_lookup_failed", self._error_message(response))
+        ports = response.json().get("ports", [])
+        if not ports:
+            raise ApiError(404, "openstack_port_not_found", f"Port reseau introuvable pour la VM {server_id}.")
+        return ports[0]["id"]
+
+    async def _assign_floating_ip(
+        self,
+        client: httpx.AsyncClient,
+        token: str,
+        network_url: str,
+        server_id: str,
+    ) -> str:
+        external_network_id = await self._resolve_external_network_id(client, token, network_url)
+        port_id = await self._find_server_port_id(client, token, network_url, server_id)
+        response = await client.post(
+            f"{network_url}/floatingips",
+            headers={"X-Auth-Token": token},
+            json={"floatingip": {"floating_network_id": external_network_id}},
+        )
+        if response.status_code not in {200, 201}:
+            raise ApiError(500, "openstack_floating_ip_create_failed", self._error_message(response))
+        floating_ip = response.json()["floatingip"]
+        floating_ip_id = floating_ip["id"]
+        try:
+            associate = await client.put(
+                f"{network_url}/floatingips/{floating_ip_id}",
+                headers={"X-Auth-Token": token},
+                json={"floatingip": {"port_id": port_id}},
+            )
+            if associate.status_code not in {200, 201}:
+                raise ApiError(500, "openstack_floating_ip_attach_failed", self._error_message(associate))
+            return associate.json()["floatingip"]["floating_ip_address"]
+        except Exception:
+            await client.delete(f"{network_url}/floatingips/{floating_ip_id}", headers={"X-Auth-Token": token})
+            raise
 
     async def _create_server(
         self,
@@ -206,13 +273,11 @@ class OpenStackService:
             "networks": [{"uuid": network_id}],
             "key_name": self.settings.openstack_keypair_name,
         }
+        if self.settings.openstack_availability_zone:
+            server["availability_zone"] = self.settings.openstack_availability_zone
         if self.settings.openstack_security_group_name:
             server["security_groups"] = [{"name": self.settings.openstack_security_group_name}]
-        response = await client.post(
-            f"{compute_url}/servers",
-            headers={"X-Auth-Token": token},
-            json={"server": server},
-        )
+        response = await client.post(f"{compute_url}/servers", headers={"X-Auth-Token": token}, json={"server": server})
         if response.status_code != 202:
             raise ApiError(500, "openstack_server_create_failed", self._error_message(response))
         return response.json()["server"]
@@ -250,6 +315,13 @@ class OpenStackService:
 
     def _error_message(self, response: httpx.Response) -> str:
         try:
-            return response.json().get("error", {}).get("message") or response.text[-1200:]
+            data = response.json()
         except ValueError:
             return response.text[-1200:]
+        if isinstance(data, dict):
+            for value in data.values():
+                if isinstance(value, dict) and value.get("message"):
+                    return str(value["message"])
+            if data.get("error"):
+                return str(data["error"])
+        return response.text[-1200:]

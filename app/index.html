@@ -12,9 +12,9 @@
 </head>
 <body>
 
-  <!-- ════════════════════════════════════════════
+  <!-- ============================================
        SIDEBAR
-  ════════════════════════════════════════════ -->
+  ============================================ -->
   <aside class="sidebar" hidden>
 
     <div class="brand">
@@ -76,9 +76,9 @@
 
   </aside><!-- /sidebar -->
 
-  <!-- ════════════════════════════════════════════
+  <!-- ============================================
        SHELL
-  ════════════════════════════════════════════ -->
+  ============================================ -->
   <main class="shell">
 
     <!-- Topbar -->
@@ -111,12 +111,12 @@
       <div class="ops-item"><span>Règle</span><strong>Aucune VM sans date de fin</strong></div>
     </div>
 
-    <!-- ──────────────────────────────────────────
+    <!-- ------------------------------------------
          CONTENT
-    ────────────────────────────────────────── -->
+    ------------------------------------------ -->
     <div class="content">
 
-      <!-- ══ LOGIN ══════════════════════════════ -->
+      <!-- == LOGIN ============================== -->
       <section class="view login-view" id="view-login" aria-label="Connexion">
         <div class="login-layout">
 
@@ -165,7 +165,7 @@
         </div>
       </section><!-- /view-login -->
 
-      <!-- ══ DASHBOARD ══════════════════════════ -->
+      <!-- == DASHBOARD ========================== -->
       <section class="view" id="view-dashboard">
         <!-- Rempli par renderDashboardCommandCenter() + renderKpis() -->
         <div id="dashboardCommandCenter"></div>
@@ -198,17 +198,17 @@
           <div id="dataControlsList" class="proof-grid"></div>
         </section>
 
-        <!-- ══ MONITORING GRAFANA ══════════════════════════ -->
+        <!-- MONITORING -->
         <section class="panel grafana-panel" style="margin-bottom:24px">
           <div class="panel-hd grafana-hd">
             <div class="grafana-hd-left">
               <div class="grafana-dot"></div>
-              <h3>Monitoring — Infomaniak OpenStack</h3>
+              <h3>Monitoring - Infomaniak OpenStack</h3>
             </div>
             <div class="grafana-hd-right">
-              <span class="grafana-badge">Grafana</span>
+              <span class="grafana-badge">Prometheus live</span>
               <a class="btn-ghost grafana-open-btn"
-                 href="http://localhost:3000"
+                 href="http://localhost:3000/d/cloudlab/cloud-lab-overview?orgId=1&refresh=10s"
                  target="_blank" rel="noopener"
                  title="Ouvrir Grafana dans un nouvel onglet">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -216,41 +216,64 @@
               </a>
             </div>
           </div>
-          <div class="grafana-frame-wrap">
-            <iframe
-              id="grafanaFrame"
-              src="http://localhost:3000/d/cloudlab/cloud-lab-overview?orgId=1&refresh=30s&theme=dark&kiosk"
-              title="Grafana — Cloud Lab Monitoring"
-              allowfullscreen
-              loading="lazy">
-            </iframe>
-            <div class="grafana-offline" id="grafanaOffline">
-              <div class="grafana-offline-inner">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h3l2-6 4 12 2-6h5"/><circle cx="12" cy="12" r="10" stroke-dasharray="4 2"/></svg>
-                <p>Grafana non disponible</p>
-                <small>Démarrez Grafana sur <code>localhost:3000</code><br>ou configurez l'URL dans le panneau ci-dessous.</small>
-                <button class="btn-ghost grafana-config-btn" onclick="document.getElementById('grafanaConfig').classList.toggle('grafana-config-open')">
-                  Configurer l'URL
-                </button>
-              </div>
-            </div>
+          <div class="grafana-live-grid" id="monitoringLiveGrid" aria-label="Metriques Prometheus temps reel">
+            <article>
+              <span>VM actives</span>
+              <strong id="liveVmRunning">--</strong>
+              <small><span id="liveVmTotal">--</span> VM suivies</small>
+            </article>
+            <article>
+              <span>Demandes attente</span>
+              <strong id="liveRequestsPending">--</strong>
+              <small>workflow Cloud Lab</small>
+            </article>
+            <article>
+              <span>Cout total</span>
+              <strong id="liveCostTotal">--</strong>
+              <small>CHF estimes</small>
+            </article>
+            <article>
+              <span>Prometheus</span>
+              <strong id="livePromStatus">SYNC</strong>
+              <small id="livePromUpdated">en attente</small>
+            </article>
           </div>
-          <div class="grafana-config" id="grafanaConfig">
-            <label class="grafana-config-label">
-              URL Grafana
-              <div class="grafana-config-row">
-                <input type="url" id="grafanaUrl"
-                  value="http://localhost:3000/d/cloudlab/cloud-lab-overview?orgId=1&refresh=30s&theme=dark&kiosk"
-                  placeholder="http://your-grafana:3000/d/...">
-                <button class="btn-primary grafana-apply-btn" onclick="applyGrafanaUrl()">Appliquer</button>
+          <div class="monitoring-board">
+            <section class="monitoring-focus">
+              <div class="monitoring-focus-head">
+                <span class="eyebrow">Prometheus live</span>
+                <strong>Supervision temps reel</strong>
+                <small>CPU, RAM et disque consolides depuis le backend FastAPI toutes les 10 secondes.</small>
               </div>
-            </label>
+              <div class="monitoring-gauges">
+                <div class="monitoring-gauge" style="--value:0" id="cpuGauge">
+                  <b id="liveCpuAvg">--%</b>
+                  <span>CPU moyen</span>
+                </div>
+                <div class="monitoring-gauge" style="--value:0" id="ramGauge">
+                  <b id="liveRamAvg">--%</b>
+                  <span>RAM moyenne</span>
+                </div>
+                <div class="monitoring-gauge" style="--value:0" id="diskGauge">
+                  <b id="liveDiskAvg">--%</b>
+                  <span>Disque moyen</span>
+                </div>
+              </div>
+            </section>
+            <section class="monitoring-status-panel">
+              <div class="monitoring-status-head">
+                <span class="eyebrow">Cycle de vie VM</span>
+                <strong>Repartition du parc</strong>
+                <small>Running, creation, attente, erreur et destruction.</small>
+              </div>
+              <div class="monitoring-status-list" id="liveStatusRows"></div>
+            </section>
           </div>
         </section>
 
       </section>
 
-      <!-- ══ CATALOGUE ══════════════════════════ -->
+      <!-- == CATALOGUE ========================== -->
       <section class="view" id="view-catalog">
         <div class="view-hd">
           <div>
@@ -261,7 +284,7 @@
         <div class="template-grid" id="templateGrid"></div>
       </section>
 
-      <!-- ══ NOUVELLE DEMANDE ═══════════════════ -->
+      <!-- == NOUVELLE DEMANDE =================== -->
       <section class="view" id="view-request">
         <div class="view-hd">
           <div>
@@ -306,7 +329,7 @@
         </form>
       </section>
 
-      <!-- ══ VALIDATION / MES DEMANDES ═════════ -->
+      <!-- == VALIDATION / MES DEMANDES ========= -->
       <section class="view" id="view-validation">
         <div class="view-hd">
           <div>
@@ -343,7 +366,7 @@
         </section>
       </section>
 
-      <!-- ══ PARC VM ════════════════════════════ -->
+      <!-- == PARC VM ============================ -->
       <section class="view" id="view-vms">
         <div class="view-hd">
           <div>
@@ -372,6 +395,7 @@
                   <th>Fin</th>
                   <th>Coût réel</th>
                   <th>CHF/h</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="vmsTable"></tbody>
@@ -380,7 +404,7 @@
         </section>
       </section>
 
-      <!-- ══ JOURNAL D'AUDIT ════════════════════ -->
+      <!-- == JOURNAL D'AUDIT ==================== -->
       <section class="view" id="view-audit">
         <div class="view-hd">
           <div>
@@ -430,7 +454,7 @@
 
   </main><!-- /shell -->
 
-  <!-- ══ SCRIPTS ══════════════════════════════ -->
+  <!-- == SCRIPTS ============================== -->
   <script>
   (function () {
     /* Clock */
@@ -443,39 +467,114 @@
     setInterval(tick, 1000);
     tick();
 
-    /* Grafana URL configurée par l'utilisateur */
-    window.applyGrafanaUrl = function () {
-      var url = document.getElementById('grafanaUrl').value.trim();
-      if (!url) return;
-      var frame = document.getElementById('grafanaFrame');
-      frame.src = url;
-      document.getElementById('grafanaConfig').classList.remove('grafana-config-open');
-    };
+    function readMetric(text, metric, labelName, labelValue) {
+      var lines = text.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line || line.charAt(0) === '#' || !line.startsWith(metric)) continue;
+        if (labelName && !line.includes(labelName + '="' + labelValue + '"')) continue;
+        var value = Number(line.split(/\s+/).pop());
+        return Number.isFinite(value) ? value : 0;
+      }
+      return 0;
+    }
 
-    /* Détection iframe Grafana loaded / offline */
-    window.addEventListener('load', function () {
-      var frame = document.getElementById('grafanaFrame');
-      var panel = frame ? frame.closest('.grafana-panel') : null;
-      var overlay = document.getElementById('grafanaOffline');
-      if (!frame) return;
-
-      // Tentative de détection de chargement
-      frame.addEventListener('load', function () {
-        try {
-          // Si même origine, pas d'erreur → live
-          if (panel) panel.classList.add('is-live');
-          if (overlay) overlay.classList.add('hidden');
-        } catch (e) {
-          // Cross-origin — on suppose que l'iframe a chargé quand même
-          if (panel) panel.classList.add('is-live');
-          if (overlay) overlay.classList.add('hidden');
+    function readMetricSamples(text, metric) {
+      return text.split('\n').map(function (line) {
+        line = line.trim();
+        if (!line || line.charAt(0) === '#' || !line.startsWith(metric)) return null;
+        var value = Number(line.split(/\s+/).pop());
+        var labels = {};
+        var labelBlock = line.match(/\{([^}]*)\}/);
+        if (labelBlock) {
+          labelBlock[1].split(',').forEach(function (pair) {
+            var parts = pair.split('=');
+            if (parts.length < 2) return;
+            labels[parts[0]] = parts.slice(1).join('=').replace(/^"|"$/g, '');
+          });
         }
-      });
+        return Number.isFinite(value) ? { labels: labels, value: value } : null;
+      }).filter(Boolean);
+    }
 
-      frame.addEventListener('error', function () {
-        if (panel) panel.classList.remove('is-live');
-        if (overlay) overlay.classList.remove('hidden');
+    function averageMetric(text, metric) {
+      var samples = readMetricSamples(text, metric);
+      if (!samples.length) return 0;
+      return samples.reduce(function (sum, sample) { return sum + sample.value; }, 0) / samples.length;
+    }
+
+    function setGauge(id, value) {
+      var gauge = document.getElementById(id);
+      if (!gauge) return;
+      var clean = Math.max(0, Math.min(100, Math.round(value)));
+      gauge.style.setProperty('--value', clean);
+    }
+
+    function renderLiveStatusRows(text) {
+      var target = document.getElementById('liveStatusRows');
+      if (!target) return;
+      var statuses = ['running', 'creating', 'pending', 'error', 'destroyed'];
+      var rows = statuses.map(function (status) {
+        return {
+          status: status,
+          label: status === 'running' ? 'Running' :
+            status === 'creating' ? 'Creating' :
+            status === 'pending' ? 'Pending' :
+            status === 'error' ? 'Error' : 'Destroyed',
+          value: readMetric(text, 'cloud_lab_vms_total', 'status', status)
+        };
       });
+      var max = Math.max.apply(null, rows.map(function (row) { return row.value; }).concat([1]));
+      target.innerHTML = rows.map(function (row) {
+        var width = Math.max(4, Math.round((row.value / max) * 100));
+        return '<div class="monitoring-status-row" data-status="' + row.status + '">' +
+          '<span>' + row.label + '</span>' +
+          '<i><b style="--width:' + width + '%"></b></i>' +
+          '<strong>' + row.value + '</strong>' +
+        '</div>';
+      }).join('');
+    }
+
+    function updateMonitoringLiveGrid() {
+      var origin = window.location.port === '8000' ? window.location.origin : 'http://localhost:8000';
+      fetch(origin + '/metrics', { cache: 'no-store' })
+        .then(function (response) {
+          if (!response.ok) throw new Error('metrics unavailable');
+          return response.text();
+        })
+        .then(function (text) {
+          var running = readMetric(text, 'cloud_lab_vms_total', 'status', 'running');
+          var total = readMetricSamples(text, 'cloud_lab_vms_total').reduce(function (sum, sample) { return sum + sample.value; }, 0);
+          var pending = readMetric(text, 'cloud_lab_requests_total', 'status', 'pending');
+          var cost = readMetric(text, 'cloud_lab_cost_estimate_chf_total');
+          var cpu = averageMetric(text, 'cloud_lab_vm_cpu_usage_percent');
+          var ram = averageMetric(text, 'cloud_lab_vm_ram_usage_percent');
+          var disk = averageMetric(text, 'cloud_lab_vm_disk_usage_percent');
+          var now = new Date();
+          document.getElementById('liveVmRunning').textContent = String(running);
+          document.getElementById('liveVmTotal').textContent = String(total);
+          document.getElementById('liveRequestsPending').textContent = String(pending);
+          document.getElementById('liveCostTotal').textContent = cost.toFixed(2) + ' CHF';
+          document.getElementById('liveCpuAvg').textContent = Math.round(cpu) + '%';
+          document.getElementById('liveRamAvg').textContent = Math.round(ram) + '%';
+          document.getElementById('liveDiskAvg').textContent = Math.round(disk) + '%';
+          setGauge('cpuGauge', cpu);
+          setGauge('ramGauge', ram);
+          setGauge('diskGauge', disk);
+          renderLiveStatusRows(text);
+          document.getElementById('livePromStatus').textContent = 'LIVE';
+          document.getElementById('livePromUpdated').textContent = 'maj ' + now.toLocaleTimeString('fr-CH');
+          var panel = document.querySelector('.grafana-panel');
+          if (panel) panel.classList.add('is-live');
+        })
+        .catch(function () {
+          document.getElementById('livePromStatus').textContent = 'OFF';
+          document.getElementById('livePromUpdated').textContent = 'backend /metrics indisponible';
+        });
+    }
+    window.addEventListener('load', function () {
+      updateMonitoringLiveGrid();
+      setInterval(updateMonitoringLiveGrid, 10000);
     });
 
     /* Toast */

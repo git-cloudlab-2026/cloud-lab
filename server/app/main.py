@@ -9,7 +9,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import ApiError, api_error_handler, unhandled_error_handler
-from app.jobs.scheduler import start_scheduler, stop_scheduler
+from app.jobs.scheduler import create_scheduler, run_lifecycle_once
+from app.monitoring.prometheus import render_prometheus_metrics
 
 
 def create_app() -> FastAPI:
@@ -22,8 +23,6 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(Exception, unhandled_error_handler)
-
-    # FIX Bug 4: utilise settings.cors_origins (lu depuis .env) au lieu de la liste hardcodée.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -39,13 +38,18 @@ def create_app() -> FastAPI:
     )
     app.include_router(api_router)
 
+    scheduler = create_scheduler()
+
     @app.on_event("startup")
-    async def on_startup() -> None:
-        start_scheduler()
+    async def start_lifecycle_scheduler():
+        if scheduler:
+            scheduler.start()
+            await run_lifecycle_once()
 
     @app.on_event("shutdown")
-    async def on_shutdown() -> None:
-        stop_scheduler()
+    async def stop_lifecycle_scheduler():
+        if scheduler:
+            scheduler.shutdown(wait=False)
 
     frontend_dir = Path("/app/frontend")
     if frontend_dir.exists():
@@ -58,6 +62,10 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok", "service": "cloud-lab-fastapi"}
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics():
+        return await render_prometheus_metrics()
 
     return app
 

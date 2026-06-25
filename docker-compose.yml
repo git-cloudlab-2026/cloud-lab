@@ -1,22 +1,24 @@
 services:
   frontend:
-    build:
-      context: ./app
+    image: nginx:1.27-alpine
     container_name: cloud-lab-frontend
     depends_on:
       backend:
         condition: service_started
     ports:
       - "8080:80"
+    volumes:
+      - ./app:/usr/share/nginx/html:ro
+      - ./app/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
     container_name: cloud-lab-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-cloud_lab_dev}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cloud_lab_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-cloud_lab}
+      POSTGRES_USER: cloud_lab_dev
+      POSTGRES_PASSWORD: cloud_lab_dev_password
+      POSTGRES_DB: cloud_lab
     ports:
       - "5432:5432"
     volumes:
@@ -54,57 +56,94 @@ services:
       OIDC_AUTO_CREATE_STUDENTS: ${OIDC_AUTO_CREATE_STUDENTS:-true}
       CORS_ORIGINS: '["http://localhost:8000","http://localhost:8080","http://localhost:3000","http://localhost:5173","null"]'
       DATABASE_URL: postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@postgres:5432/cloud_lab
-      # FIX Bug 3: PROVISIONER_MODE et REAL_PROVISIONING_ENABLED explicites.
-      # Pour Infomaniak réel : mettre PROVISIONER_MODE=terraform et REAL_PROVISIONING_ENABLED=true dans .env
       PROVISIONER_MODE: ${PROVISIONER_MODE:-mock}
       REAL_PROVISIONING_ENABLED: ${REAL_PROVISIONING_ENABLED:-false}
-      TERRAFORM_BINARY: ${TERRAFORM_BINARY:-terraform}
-      # FIX Bug 1: chemins Linux dans le conteneur (pas de chemins Windows)
-      TERRAFORM_MODULE_DIR: ${TERRAFORM_MODULE_DIR:-/app/infrastructure}
-      TERRAFORM_WORK_DIR: ${TERRAFORM_WORK_DIR:-/app/.terraform-runs}
-      TERRAFORM_SSH_PUBLIC_KEY_PATH: ${TERRAFORM_SSH_PUBLIC_KEY_PATH:-/app/infrastructure/cloud-lab-key.pub}
-      TERRAFORM_OPENSTACK_CLOUD_NAME: ${TERRAFORM_OPENSTACK_CLOUD_NAME:-openstack}
-      TERRAFORM_REGION: ${TERRAFORM_REGION:-dc4-a}
-      TERRAFORM_PROJECT_PREFIX: ${TERRAFORM_PROJECT_PREFIX:-cloud-lab}
-      TERRAFORM_NETWORK_CIDR: ${TERRAFORM_NETWORK_CIDR:-10.42.0.0/24}
-      TERRAFORM_EXTERNAL_NETWORK_NAME: ${TERRAFORM_EXTERNAL_NETWORK_NAME:-ext-floating1}
-      TERRAFORM_DEFAULT_FLAVOR_NAME: ${TERRAFORM_DEFAULT_FLAVOR_NAME:-a1-ram2-disk20-perf1}
-      TERRAFORM_IMAGE_NAME: ${TERRAFORM_IMAGE_NAME:-Ubuntu 24.04 LTS Noble Numbat}
-      TERRAFORM_ASSIGN_FLOATING_IP: ${TERRAFORM_ASSIGN_FLOATING_IP:-false}
-      TERRAFORM_SSH_PUBLIC_KEY: ${TERRAFORM_SSH_PUBLIC_KEY:-}
       OS_AUTH_URL: ${OS_AUTH_URL:-}
       OS_PROJECT_NAME: ${OS_PROJECT_NAME:-}
       OS_USERNAME: ${OS_USERNAME:-}
       OS_PASSWORD: ${OS_PASSWORD:-}
       OS_REGION_NAME: ${OS_REGION_NAME:-dc4-a}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Cloud Lab}
-      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
-      EMAIL_NOTIFICATIONS_ENABLED: ${EMAIL_NOTIFICATIONS_ENABLED:-false}
+      OS_USER_DOMAIN_NAME: ${OS_USER_DOMAIN_NAME:-Default}
+      OS_PROJECT_DOMAIN_NAME: ${OS_PROJECT_DOMAIN_NAME:-Default}
+      OPENSTACK_NETWORK_ID: ${OPENSTACK_NETWORK_ID:-}
+      OPENSTACK_NETWORK_NAME: ${OPENSTACK_NETWORK_NAME:-}
+      OPENSTACK_KEYPAIR_NAME: ${OPENSTACK_KEYPAIR_NAME:-cloud-lab-key}
+      OPENSTACK_SECURITY_GROUP_NAME: ${OPENSTACK_SECURITY_GROUP_NAME:-}
+      OPENSTACK_AVAILABILITY_ZONE: ${OPENSTACK_AVAILABILITY_ZONE:-az-1}
+      OPENSTACK_BOOT_TIMEOUT_SECONDS: ${OPENSTACK_BOOT_TIMEOUT_SECONDS:-420}
+      TERRAFORM_BINARY: ${TERRAFORM_BINARY:-terraform}
+      TERRAFORM_MODULE_DIR: ${TERRAFORM_MODULE_DIR:-/app/infrastructure}
+      TERRAFORM_WORK_DIR: ${TERRAFORM_WORK_DIR:-/app/.terraform-runs}
+      TERRAFORM_OPENSTACK_CLOUD_NAME: ${TERRAFORM_OPENSTACK_CLOUD_NAME:-openstack}
+      TERRAFORM_REGION: ${TERRAFORM_REGION:-dc4-a}
+      TERRAFORM_PROJECT_PREFIX: ${TERRAFORM_PROJECT_PREFIX:-cloud-lab}
+      TERRAFORM_NETWORK_CIDR: ${TERRAFORM_NETWORK_CIDR:-10.42.0.0/24}
+      TERRAFORM_EXTERNAL_NETWORK_NAME: ${TERRAFORM_EXTERNAL_NETWORK_NAME:-ext-floating1}
+      TERRAFORM_ALLOWED_SSH_CIDRS: ${TERRAFORM_ALLOWED_SSH_CIDRS:-["0.0.0.0/0"]}
+      TERRAFORM_DEFAULT_FLAVOR_NAME: ${TERRAFORM_DEFAULT_FLAVOR_NAME:-a1-ram2-disk20-perf1}
+      TERRAFORM_IMAGE_NAME: ${TERRAFORM_IMAGE_NAME:-Ubuntu 24.04 LTS Noble Numbat}
+      TERRAFORM_ASSIGN_FLOATING_IP: ${TERRAFORM_ASSIGN_FLOATING_IP:-false}
+      TERRAFORM_SSH_PUBLIC_KEY: ${TERRAFORM_SSH_PUBLIC_KEY:-}
+      TERRAFORM_SSH_PUBLIC_KEY_PATH: ${TERRAFORM_SSH_PUBLIC_KEY_PATH:-}
+      SEED_DATABASE_ON_START: ${SEED_DATABASE_ON_START:-false}
     ports:
       - "8000:8000"
-    restart: unless-stopped
     volumes:
       - ./server/app:/app/app
       - ./server/alembic:/app/alembic
       - ./server/scripts:/app/scripts
       - ./app:/app/frontend:ro
       - ./infrastructure:/app/infrastructure:ro
-      # FIX Bug 7: persiste les dossiers .terraform-runs entre les redémarrages du conteneur
       - terraform_runs:/app/.terraform-runs
-    # FIX Bug 7: le seed utilise --if-empty pour ne pas réécrire les données existantes
-    command: >
-      sh -c "
-        alembic upgrade head &&
-        python -m scripts.seed --if-empty 2>/dev/null || python -m scripts.seed ;
-        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-      "
+    command: sh -c "alembic upgrade head && if [ \"$SEED_DATABASE_ON_START\" = \"true\" ]; then python -m scripts.seed; fi && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: cloud-lab-prometheus
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: cloud-lab-grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SERVER_ROOT_URL: http://localhost:3000/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_NAME: Main Org.
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_USERS_DEFAULT_THEME: dark
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/cloud-lab-overview.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
 
 volumes:
   cloud_lab_pgdata:
-  # FIX Bug 7: volume nommé pour persister les états Terraform entre les redémarrages
   terraform_runs:
+  prometheus_data:
+  grafana_data:
