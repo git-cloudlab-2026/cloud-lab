@@ -41,7 +41,7 @@ async def get_vm(vm_id: int, session: AsyncSession = Depends(get_session), user:
 
 @router.post("/{vm_id}/destroy", response_model=dict)
 async def destroy_vm(vm_id: int, session: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
-    row = await VirtualMachineService(session).destroy_with_mock(vm_id, user)
+    row = await VirtualMachineService(session).destroy(vm_id, user)
     return {"data": VirtualMachineRead.model_validate(row)}
 
 

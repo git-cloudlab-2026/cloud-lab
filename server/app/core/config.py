@@ -18,12 +18,71 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-only-jwt-secret-change-me"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_hours: int = 8
+
+    # --- Provisioner ---
+    # FIX Bug 3: valeur par défaut "mock" pour éviter le 409 en Docker sans config explicite.
+    # Mettre PROVISIONER_MODE=terraform et REAL_PROVISIONING_ENABLED=true dans .env pour Infomaniak.
+    provisioner_mode: Literal["mock", "terraform", "openstack"] = "mock"
+    real_provisioning_enabled: bool = False
+
     mock_terraform_create_delay_seconds: float = 0.2
     mock_terraform_destroy_delay_seconds: float = 0.1
+
+    # --- Terraform ---
+    terraform_binary: str = "terraform"
+    # FIX Bug 1: suppression des chemins Windows hardcodés — None = résolution dynamique depuis __file__
+    terraform_module_dir: str | None = None
+    terraform_work_dir: str = ".terraform-runs"
+    terraform_openstack_cloud_name: str = "openstack"
+    terraform_region: str = "dc4-a"
+    terraform_project_prefix: str = "cloud-lab"
+    terraform_network_cidr: str = "10.42.0.0/24"
+    terraform_external_network_name: str = "ext-floating1"
+    terraform_allowed_ssh_cidrs: list[str] = ["0.0.0.0/0"]
+    terraform_default_flavor_name: str | None = "a1-ram2-disk20-perf1"
+    terraform_image_name: str | None = "Ubuntu 24.04 LTS Noble Numbat"
+    terraform_assign_floating_ip: bool = False
+    terraform_ssh_public_key: str | None = None
+    terraform_ssh_public_key_path: str | None = None
+
+    # --- OpenStack direct ---
+    os_auth_url: str | None = None
+    os_project_name: str | None = None
+    os_username: str | None = None
+    os_password: str | None = None
+    os_region_name: str = "dc4-a"
+    os_user_domain_name: str = "Default"
+    os_project_domain_name: str = "Default"
+    openstack_network_id: str | None = None
+    openstack_network_name: str | None = None
+    openstack_keypair_name: str = "cloud-lab-key"
+    openstack_security_group_name: str | None = None
+    openstack_boot_timeout_seconds: int = 420
+
+    # --- Scheduler ---
     lifecycle_scheduler_enabled: bool = True
     lifecycle_scheduler_interval_seconds: int = 3600
-    cors_origins: list[str] = ["http://localhost:8000", "http://localhost:3000", "http://localhost:5173", "null"]
 
+    # --- Email ---
+    email_notifications_enabled: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str = "Cloud Lab"
+    smtp_use_tls: bool = True
+
+    # FIX Bug 4: cors_origins est lu depuis .env et utilisé dans main.py (ne pas dupliquer)
+    cors_origins: list[str] = [
+        "http://localhost:8000",
+        "http://localhost:8080",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "null",
+    ]
+
+    # --- Azure / OIDC ---
     azure_tenant_id: str | None = None
     azure_client_id: str | None = None
     azure_client_secret: str | None = None
@@ -89,7 +148,11 @@ class Settings(BaseSettings):
                 mapping[group_id] = ("student", class_name)
         return mapping
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=[".env", "../.env"],
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 @lru_cache

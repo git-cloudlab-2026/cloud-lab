@@ -61,7 +61,8 @@ infrastructure/            Terraform/OpenTofu Infomaniak OpenStack
 ansible/                   Playbook et role SSH hardening
 docs/                      Documentation technique
 .github/workflows/ci.yml   Pipeline CI GitHub Actions
-docker-compose.yml         PostgreSQL + API locale
+docker-compose.yml         Stack locale Docker: frontend + API + PostgreSQL + Terraform
+docker-compose.prod.yml    Variante production sans montage live du code
 .env.example               Exemple de configuration sans secret
 Makefile                   Commandes utiles
 README.md                  Documentation principale
@@ -99,22 +100,24 @@ AUTH_MODE=oidc
 
 ## Installation locale avec Docker
 
-Commande recommandee pour tester tout le backend :
+Commande recommandee pour tester l'application :
 
 ```powershell
 docker compose up --build
 ```
 
-Le conteneur backend lance :
+La stack Docker lance :
 
-1. les migrations Alembic;
-2. le seed de donnees demo;
-3. FastAPI sur le port `8000`.
+1. PostgreSQL;
+2. le backend FastAPI;
+3. les migrations Alembic;
+4. le seed de donnees demo;
+5. le frontend Nginx.
 
 URLs utiles :
 
 ```text
-Portail web      http://localhost:8000/portal/
+Portail web      http://localhost:8080/portal/
 Swagger OpenAPI  http://localhost:8000/docs
 Healthcheck      http://localhost:8000/health
 ```
@@ -123,6 +126,57 @@ Arret :
 
 ```powershell
 docker compose down
+```
+
+## Terraform / Infomaniak
+
+Terraform reste volontairement separe de Docker pour garder le provisioning cloud controlable pendant le projet.
+
+Workflow recommande :
+
+1. lancer Terraform depuis `infrastructure/`;
+2. verifier les ressources dans Infomaniak;
+3. exporter ou synchroniser les outputs Terraform vers le backend;
+4. afficher les VM dans le portail.
+
+Le backend garde un mode `PROVISIONER_MODE=terraform`, mais le mode par defaut Docker est :
+
+```text
+PROVISIONER_MODE=mock
+```
+
+Cela evite qu'un clic dans le site cree des ressources Infomaniak par accident.
+
+## Emails et scheduler
+
+Les notifications sont toujours stockees en base. L'envoi email est optionnel et s'active avec :
+
+```text
+EMAIL_NOTIFICATIONS_ENABLED=true
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+SMTP_FROM_EMAIL=cloudlab@example.com
+SMTP_USE_TLS=true
+```
+
+Le scheduler backend tourne automatiquement si :
+
+```text
+LIFECYCLE_SCHEDULER_ENABLED=true
+LIFECYCLE_SCHEDULER_INTERVAL_SECONDS=3600
+```
+
+Il envoie une alerte 24h avant expiration et marque les VM expirees en base. Les actions infra nuit/week-end restent separees tant que le provisioning cloud n'est pas valide.
+
+Ne jamais commit :
+
+```text
+.env
+infrastructure/clouds.yaml
+cles SSH privees
+terraform.tfstate
 ```
 
 ## Installation locale sans Docker

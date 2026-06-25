@@ -1,11 +1,22 @@
 services:
+  frontend:
+    build:
+      context: ./app
+    container_name: cloud-lab-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: cloud-lab-postgres
     environment:
-      POSTGRES_USER: cloud_lab_dev
-      POSTGRES_PASSWORD: cloud_lab_dev_password
-      POSTGRES_DB: cloud_lab
+      POSTGRES_USER: ${POSTGRES_USER:-cloud_lab_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cloud_lab_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cloud_lab}
     ports:
       - "5432:5432"
     volumes:
@@ -41,15 +52,59 @@ services:
       ENTRA_STUDENT_E4_GROUP_ID: ${ENTRA_STUDENT_E4_GROUP_ID:-}
       ENTRA_STUDENT_E5_GROUP_ID: ${ENTRA_STUDENT_E5_GROUP_ID:-}
       OIDC_AUTO_CREATE_STUDENTS: ${OIDC_AUTO_CREATE_STUDENTS:-true}
+      CORS_ORIGINS: '["http://localhost:8000","http://localhost:8080","http://localhost:3000","http://localhost:5173","null"]'
       DATABASE_URL: postgresql+asyncpg://cloud_lab_dev:cloud_lab_dev_password@postgres:5432/cloud_lab
+      # FIX Bug 3: PROVISIONER_MODE et REAL_PROVISIONING_ENABLED explicites.
+      # Pour Infomaniak réel : mettre PROVISIONER_MODE=terraform et REAL_PROVISIONING_ENABLED=true dans .env
+      PROVISIONER_MODE: ${PROVISIONER_MODE:-mock}
+      REAL_PROVISIONING_ENABLED: ${REAL_PROVISIONING_ENABLED:-false}
+      TERRAFORM_BINARY: ${TERRAFORM_BINARY:-terraform}
+      # FIX Bug 1: chemins Linux dans le conteneur (pas de chemins Windows)
+      TERRAFORM_MODULE_DIR: ${TERRAFORM_MODULE_DIR:-/app/infrastructure}
+      TERRAFORM_WORK_DIR: ${TERRAFORM_WORK_DIR:-/app/.terraform-runs}
+      TERRAFORM_SSH_PUBLIC_KEY_PATH: ${TERRAFORM_SSH_PUBLIC_KEY_PATH:-/app/infrastructure/cloud-lab-key.pub}
+      TERRAFORM_OPENSTACK_CLOUD_NAME: ${TERRAFORM_OPENSTACK_CLOUD_NAME:-openstack}
+      TERRAFORM_REGION: ${TERRAFORM_REGION:-dc4-a}
+      TERRAFORM_PROJECT_PREFIX: ${TERRAFORM_PROJECT_PREFIX:-cloud-lab}
+      TERRAFORM_NETWORK_CIDR: ${TERRAFORM_NETWORK_CIDR:-10.42.0.0/24}
+      TERRAFORM_EXTERNAL_NETWORK_NAME: ${TERRAFORM_EXTERNAL_NETWORK_NAME:-ext-floating1}
+      TERRAFORM_DEFAULT_FLAVOR_NAME: ${TERRAFORM_DEFAULT_FLAVOR_NAME:-a1-ram2-disk20-perf1}
+      TERRAFORM_IMAGE_NAME: ${TERRAFORM_IMAGE_NAME:-Ubuntu 24.04 LTS Noble Numbat}
+      TERRAFORM_ASSIGN_FLOATING_IP: ${TERRAFORM_ASSIGN_FLOATING_IP:-false}
+      TERRAFORM_SSH_PUBLIC_KEY: ${TERRAFORM_SSH_PUBLIC_KEY:-}
+      OS_AUTH_URL: ${OS_AUTH_URL:-}
+      OS_PROJECT_NAME: ${OS_PROJECT_NAME:-}
+      OS_USERNAME: ${OS_USERNAME:-}
+      OS_PASSWORD: ${OS_PASSWORD:-}
+      OS_REGION_NAME: ${OS_REGION_NAME:-dc4-a}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Cloud Lab}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      EMAIL_NOTIFICATIONS_ENABLED: ${EMAIL_NOTIFICATIONS_ENABLED:-false}
     ports:
       - "8000:8000"
+    restart: unless-stopped
     volumes:
       - ./server/app:/app/app
       - ./server/alembic:/app/alembic
       - ./server/scripts:/app/scripts
       - ./app:/app/frontend:ro
-    command: sh -c "alembic upgrade head && python -m scripts.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - ./infrastructure:/app/infrastructure:ro
+      # FIX Bug 7: persiste les dossiers .terraform-runs entre les redémarrages du conteneur
+      - terraform_runs:/app/.terraform-runs
+    # FIX Bug 7: le seed utilise --if-empty pour ne pas réécrire les données existantes
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        python -m scripts.seed --if-empty 2>/dev/null || python -m scripts.seed ;
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
 
 volumes:
   cloud_lab_pgdata:
+  # FIX Bug 7: volume nommé pour persister les états Terraform entre les redémarrages
+  terraform_runs:

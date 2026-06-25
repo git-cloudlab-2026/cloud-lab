@@ -59,15 +59,16 @@ variable "default_flavor_name" {
 }
 
 variable "ssh_keypair_name" {
-  description = "Nom de la keypair OpenStack a utiliser/creer pour l'acces SSH aux VM."
+  description = "Nom de la keypair OpenStack existante a utiliser pour l'acces SSH aux VM."
   type        = string
   default     = "cloud-lab-key"
 }
 
 variable "ssh_public_key" {
-  description = "Cle publique SSH (contenu, pas chemin) injectee dans la keypair OpenStack."
+  description = "Deprecated: la keypair OpenStack est geree hors de ce module."
   type        = string
   sensitive   = true
+  default     = null
 }
 
 variable "assign_floating_ip" {

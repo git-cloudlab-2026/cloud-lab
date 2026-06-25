@@ -1,7 +1,3 @@
-# Outputs structures pour matcher le payload attendu par le backend FastAPI :
-# PATCH /api/v1/virtual-machines/{id}/provisioning-result
-# { "provider_vm_id": ..., "ip_address": ..., "status": ..., "network_segment": ... }
-
 output "provisioning_results" {
   description = "Resultats de provisioning, un objet par VM, prets a etre envoyes au backend."
   value = {
@@ -15,16 +11,6 @@ output "provisioning_results" {
 }
 
 output "ssh_fingerprint" {
-  description = "Fingerprint de la keypair SSH utilisee pour toutes les VM du segment."
-  value       = openstack_compute_keypair_v2.lab_keypair.fingerprint
-}
-
-output "network_id" {
-  description = "ID du reseau prive cree pour ce segment."
-  value       = openstack_networking_network_v2.lab_network.id
-}
-
-output "router_id" {
-  description = "ID du routeur reliant le segment au reseau externe."
-  value       = openstack_networking_router_v2.lab_router.id
+  description = "Nom de la keypair SSH OpenStack reutilisee pour toutes les VM."
+  value       = var.ssh_keypair_name
 }

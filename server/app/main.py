@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import ApiError, api_error_handler, unhandled_error_handler
+from app.jobs.scheduler import start_scheduler, stop_scheduler
 
 
 def create_app() -> FastAPI:
@@ -21,6 +22,8 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(Exception, unhandled_error_handler)
+
+    # FIX Bug 4: utilise settings.cors_origins (lu depuis .env) au lieu de la liste hardcodée.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -35,6 +38,14 @@ def create_app() -> FastAPI:
         same_site="lax",
     )
     app.include_router(api_router)
+
+    @app.on_event("startup")
+    async def on_startup() -> None:
+        start_scheduler()
+
+    @app.on_event("shutdown")
+    async def on_shutdown() -> None:
+        stop_scheduler()
 
     frontend_dir = Path("/app/frontend")
     if frontend_dir.exists():

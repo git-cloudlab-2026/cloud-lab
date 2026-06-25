@@ -32,7 +32,7 @@ const EXPIRING_THRESHOLD_HOURS = 24;
 const IS_HTTP_APP = window.location.protocol === "http:" || window.location.protocol === "https:";
 const DATA_MODE = "api"; // Production: FastAPI/PostgreSQL uniquement.
 const AUTH_MODE_FRONT = "mock"; // Le backend peut rester en AUTH_MODE=mock pendant le developpement.
-const API_ORIGIN = IS_HTTP_APP ? window.location.origin : "http://localhost:8000";
+const API_ORIGIN = "http://localhost:8000"; // Backend FastAPI local
 const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 const API_DEV_LOGIN_USER_ID = 1;
 const AUTH_TOKEN_KEY = "cloudLabAccessToken";

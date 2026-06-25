@@ -1,4 +1,15 @@
+"""seed.py — données de démonstration pour Cloud Lab.
+
+Usage:
+  python -m scripts.seed              # Toujours TRUNCATE + réinsérer (reset complet)
+  python -m scripts.seed --if-empty   # Ne fait rien si des utilisateurs existent déjà
+
+FIX Bug 7: le docker-compose appelle `python -m scripts.seed --if-empty` pour éviter
+de remettre à zéro les données réelles (VM, demandes) à chaque redémarrage du conteneur.
+"""
+
 import asyncio
+import sys
 
 from sqlalchemy import text
 
@@ -59,10 +70,6 @@ INSERT INTO vm_metrics (id, vm_id, cpu_usage_percent, ram_usage_percent, disk_us
 (2, 1, 8.10, 42.70, 31.20, 'up', '2026-06-16 11:00:00+02'),
 (3, 2, 0.20, 10.10, 25.00, 'down', '2026-06-16 11:00:00+02');
 
-INSERT INTO cost_records (id, vm_id, cost_date, hours_running, cost_estimate_chf) VALUES
-(1, 1, '2026-06-16', 8.00, 0.40),
-(2, 2, '2026-06-16', 2.00, 0.14);
-
 INSERT INTO audit_events (id, actor_id, request_id, vm_id, event_type, severity, event_message) VALUES
 (1, 100, 1, NULL, 'request_created', 'success', 'Un etudiant E1 a cree une demande Linux Admin.'),
 (2, 2, 1, NULL, 'request_approved', 'success', 'Nadia a approuve la demande.'),
@@ -82,15 +89,28 @@ SELECT setval(pg_get_serial_sequence('notifications', 'id'), COALESCE((SELECT MA
 """
 
 
-async def main() -> None:
+async def has_existing_data(session) -> bool:
+    """Retourne True si des utilisateurs existent déjà en base."""
+    result = await session.execute(text("SELECT COUNT(*) FROM users"))
+    count = result.scalar_one()
+    return count > 0
+
+
+async def main(if_empty: bool = False) -> None:
     async with SessionLocal() as session:
+        if if_empty and await has_existing_data(session):
+            print("Seed ignoré : des données existent déjà (--if-empty). Aucun TRUNCATE effectué.")
+            return
+
         for statement in SEED_SQL.split(";"):
             statement = statement.strip()
             if statement:
                 await session.execute(text(statement))
         await session.commit()
-    print("Seed PostgreSQL termine: 5 classes E1-E5, 25 eleves par classe.")
+
+    print("Seed PostgreSQL terminé : 5 classes E1-E5, 25 élèves par classe.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if_empty_flag = "--if-empty" in sys.argv
+    asyncio.run(main(if_empty=if_empty_flag))

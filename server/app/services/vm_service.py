@@ -8,8 +8,8 @@ from app.domain.models import User, VirtualMachine, VmMetric
 from app.repositories.vms import VirtualMachineRepository, VmMetricRepository
 from app.schemas.common import DestructionResult, ProvisioningResult, VirtualMachinePatch, VmMetricCreate
 from app.services.audit_service import AuditService
-from app.services.mock_terraform import MockTerraformService
 from app.services.notification_service import NotificationService
+from app.services.provisioner import get_provisioner
 
 
 class VirtualMachineService:
@@ -19,7 +19,7 @@ class VirtualMachineService:
         self.metrics = VmMetricRepository(session)
         self.audit = AuditService(session)
         self.notifications = NotificationService(session)
-        self.terraform = MockTerraformService()
+        self.provisioner = get_provisioner()
 
     async def get_visible_vm(self, vm_id: int, actor: User) -> VirtualMachine:
         vm = await self.vms.get(vm_id)
@@ -78,19 +78,19 @@ class VirtualMachineService:
         await self.session.refresh(metric)
         return metric
 
-    async def destroy_with_mock(self, vm_id: int, actor: User) -> VirtualMachine:
+    async def destroy(self, vm_id: int, actor: User) -> VirtualMachine:
         vm = await self.get_visible_vm(vm_id, actor)
         if vm.status == VmStatus.destroyed:
             return vm
         if actor.role.value not in {"admin", "validator"} and vm.owner_id != actor.id:
             raise ApiError(403, "vm_destroy_forbidden", "Droits insuffisants pour detruire cette VM.")
 
-        await self.terraform.destroy_vm(vm.provider_vm_id)
+        await self.provisioner.destroy_vm(vm.provider_vm_id)
         vm.status = VmStatus.destroyed
         vm.destroyed_at = datetime.now(timezone.utc)
         self.audit.record(
-            "vm_destroyed_mock",
-            f"VM {vm.name} detruite en mode mock Terraform.",
+            "vm_destroyed_by_provisioner",
+            f"VM {vm.name} detruite par le provisioner.",
             severity=AuditSeverity.danger,
             actor_id=actor.id,
             vm_id=vm.id,
@@ -99,7 +99,7 @@ class VirtualMachineService:
             vm.owner_id,
             NotificationType.vm_destroyed,
             "VM detruite",
-            f"La VM {vm.name} a ete detruite en mode mock.",
+            f"La VM {vm.name} a ete detruite.",
         )
         await self.session.commit()
         await self.session.refresh(vm)
