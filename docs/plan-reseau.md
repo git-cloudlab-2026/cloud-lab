@@ -9,12 +9,9 @@ Les VMs d'une classe ne peuvent pas communiquer avec celles d'une autre classe.
 
 | Classe | Réseau | CIDR | Passerelle |
 |--------|--------|------|------------|
-| E1 | class-e1 | 10.10.1.0/24 | 10.10.1.1 |
-| E2 | class-e2 | 10.10.2.0/24 | 10.10.2.1 |
-| E3 | class-e3 | 10.10.3.0/24 | 10.10.3.1 |
-| E4 | class-e4 | 10.10.4.0/24 | 10.10.4.1 |
-| E5 | class-e5 | 10.10.5.0/24 | 10.10.5.1 |
-| Staff/Formateurs | class-staff | 10.10.0.0/24 | 10.10.0.1 |
+| E1 | cloud-lab-class-e1 | 10.42.1.0/24 | 10.42.1.1 |
+| Staff | cloud-lab-class-staff | 10.42.0.0/24 | 10.42.0.1 |
+| IT-2026-A | cloud-lab-IT-2026-A | 10.42.0.0/24 | 10.42.0.1 |
 
 ## Règles firewall (Security Group : sg-student-vm)
 
