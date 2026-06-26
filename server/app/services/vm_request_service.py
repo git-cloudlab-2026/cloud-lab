@@ -1,14 +1,33 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+from dataclasses import dataclass
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ApiError
+from app.db.session import SessionLocal
 from app.domain.enums import AuditSeverity, NotificationType, RequestStatus, UserRole, VmStatus
 from app.domain.models import User, VirtualMachine, VmRequest, VmTemplate
 from app.repositories.vm_requests import VmRequestRepository
+from app.services.ansible_service import AnsibleService
 from app.schemas.common import VmRequestCreate, VmRequestPatch
 from app.services.audit_service import AuditService
+from app.services.cost_service import CostService
 from app.services.notification_service import NotificationService
 from app.services.provisioner import get_provisioner
+
+
+@dataclass(frozen=True)
+class AnsibleProvisioningJob:
+    vm_id: int
+    request_id: int
+    actor_id: int
+    vm_ip: str | None
+    vm_name: str
+    template_type: str
+    course_name: str
+    end_date: str
+    ssh_user: str | None
 
 
 class VmRequestService:
@@ -16,19 +35,21 @@ class VmRequestService:
         self.session = session
         self.requests = VmRequestRepository(session)
         self.audit = AuditService(session)
+        self.costs = CostService(session)
         self.notifications = NotificationService(session)
         self.provisioner = get_provisioner()
+        self.ansible = AnsibleService()
 
     async def create(self, payload: VmRequestCreate, actor: User) -> VmRequest:
         if actor.role not in {UserRole.admin, UserRole.validator, UserRole.teacher} and actor.id != payload.requester_id:
-            raise ApiError(403, "requester_mismatch", "Un étudiant ne peut créer une demande que pour son propre compte.")
+            raise ApiError(403, "requester_mismatch", "Un etudiant ne peut creer une demande que pour son propre compte.")
 
         request = VmRequest(**payload.model_dump(), status=RequestStatus.pending)
         self.session.add(request)
         await self.session.flush()
         self.audit.record(
             "request_created",
-            f"Demande #{request.id} créée.",
+            f"Demande #{request.id} creee.",
             severity=AuditSeverity.success,
             actor_id=actor.id,
             request_id=request.id,
@@ -44,13 +65,25 @@ class VmRequestService:
                 actor_id=actor.id,
                 request_id=request.id,
             )
-            await self._provision_request(request, actor)
-        await self.session.commit()
+            await self.session.commit()
+            try:
+                ansible_jobs = await self._provision_request(request, actor)
+                await self.session.commit()
+                self._schedule_ansible_jobs(ansible_jobs)
+            except ApiError as exc:
+                await self._mark_provisioning_failed(request.id, actor, exc.message)
+                raise
+            except Exception as exc:
+                message = str(exc) or exc.__class__.__name__
+                await self._mark_provisioning_failed(request.id, actor, message)
+                raise ApiError(500, "provisioning_failed", f"Provisionnement echoue: {message}") from exc
+        else:
+            await self.session.commit()
         await self.session.refresh(request)
         return request
 
     async def approve_and_provision(self, request_id: int, actor: User) -> VmRequest:
-        request = await self.requests.get(request_id)
+        request = await self._get_request_for_update(request_id)
         if not request:
             raise ApiError(404, "vm_request_not_found", "Demande VM introuvable.")
         if request.status not in {RequestStatus.pending, RequestStatus.approved}:
@@ -69,14 +102,16 @@ class VmRequestService:
         )
         await self.session.commit()
         try:
-            await self._provision_request(request, actor)
+            ansible_jobs = await self._provision_request(request, actor)
             await self.session.commit()
+            self._schedule_ansible_jobs(ansible_jobs)
         except ApiError as exc:
             await self._mark_provisioning_failed(request_id, actor, exc.message)
             raise
         except Exception as exc:
-            await self._mark_provisioning_failed(request_id, actor, str(exc) or exc.__class__.__name__)
-            raise ApiError(500, "provisioning_failed", f"Provisionnement echoue: {str(exc) or exc.__class__.__name__}") from exc
+            message = str(exc) or exc.__class__.__name__
+            await self._mark_provisioning_failed(request_id, actor, message)
+            raise ApiError(500, "provisioning_failed", f"Provisionnement echoue: {message}") from exc
         await self.session.refresh(request)
         return request
 
@@ -107,24 +142,25 @@ class VmRequestService:
         await self.session.refresh(request)
         return request
 
-    async def _provision_request(self, request: VmRequest, actor: User) -> None:
+    async def _provision_request(self, request: VmRequest, actor: User) -> list[AnsibleProvisioningJob]:
         owner = await self.session.get(User, request.requester_id)
         template = await self.session.get(VmTemplate, request.template_id)
         if not owner or not template:
             raise ApiError(422, "invalid_request_links", "Demande incomplete: utilisateur ou template introuvable.")
 
         provisioned_vms = await self.provisioner.create_vms(request, template, owner)
-        for terraform_vm in provisioned_vms:
+        ansible_jobs: list[AnsibleProvisioningJob] = []
+        for provisioned_vm in provisioned_vms:
             vm = VirtualMachine(
                 request_id=request.id,
                 owner_id=owner.id,
-                provider_vm_id=terraform_vm.provider_vm_id,
-                name=terraform_vm.name,
-                ip_address=terraform_vm.ip_address,
-                status=VmStatus.running,
-                ssh_username=terraform_vm.ssh_username,
-                ssh_key_fingerprint=terraform_vm.ssh_key_fingerprint,
-                network_segment=terraform_vm.network_segment,
+                provider_vm_id=provisioned_vm.provider_vm_id,
+                name=provisioned_vm.name,
+                ip_address=provisioned_vm.ip_address,
+                status=VmStatus.configuring if self.ansible.settings.ansible_enabled else VmStatus.running,
+                ssh_username=provisioned_vm.ssh_username,
+                ssh_key_fingerprint=provisioned_vm.ssh_key_fingerprint,
+                network_segment=provisioned_vm.network_segment,
                 start_date=request.start_date,
                 end_date=request.end_date,
             )
@@ -138,20 +174,32 @@ class VmRequestService:
                 request_id=request.id,
                 vm_id=vm.id,
             )
+            await self.costs.refresh_vm(vm.id)
+            ansible_jobs.append(
+                AnsibleProvisioningJob(
+                    vm_id=vm.id,
+                    request_id=request.id,
+                    actor_id=actor.id,
+                    vm_ip=vm.ip_address,
+                    vm_name=vm.name,
+                    template_type=template.ansible_playbook or template.name,
+                    course_name=template.name,
+                    end_date=request.end_date.isoformat(),
+                    ssh_user=None,
+                )
+            )
 
         request.status = RequestStatus.provisioned
-        await self.notifications.create_and_email(
-            owner,
+        self.notifications.create(
+            request.requester_id,
             NotificationType.vm_request_approved,
             "Demande VM approuvee",
             f"Votre demande #{request.id} a ete approuvee et provisionnee. Votre environnement est disponible dans Cloud Lab.",
-            email_subject="Cloud Lab - demande VM approuvee",
         )
+        return ansible_jobs
 
     async def _ensure_not_already_provisioned(self, request: VmRequest) -> None:
-        existing_vm = await self.session.scalar(
-            select(VirtualMachine).where(VirtualMachine.request_id == request.id)
-        )
+        existing_vm = await self.session.scalar(select(VirtualMachine).where(VirtualMachine.request_id == request.id))
         if existing_vm:
             raise ApiError(
                 409,
@@ -160,40 +208,28 @@ class VmRequestService:
             )
 
     async def _mark_provisioning_failed(self, request_id: int, actor: User, message: str) -> None:
-        try:
-            await self.session.rollback()
-        except Exception:
-            pass
-        try:
-            from app.db.session import SessionLocal
-            async with SessionLocal() as new_session:
-                from app.repositories.vm_requests import VmRequestRepository
-                from app.services.audit_service import AuditService
-                repo = VmRequestRepository(new_session)
-                request = await repo.get(request_id)
-                if not request:
-                    return
-                request.status = RequestStatus.failed
-                request.decision_comment = "Provisionnement echoue. Verification manuelle requise avant relance."
-                short_message = (message or "Erreur inconnue").replace("\x00", "")[:900]
-                AuditService(new_session).record(
-                    "request_provisioning_failed",
-                    f"Provisionnement echoue pour la demande #{request_id}: {short_message}",
-                    severity=AuditSeverity.danger,
-                    actor_id=actor.id if hasattr(actor, "id") else 0,
-                    request_id=request_id,
-                )
-                await new_session.commit()
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error("_mark_provisioning_failed error: %s", e)
+        await self.session.rollback()
+        request = await self.requests.get(request_id)
+        if not request:
+            return
+        request.status = RequestStatus.failed
+        request.decision_comment = "Provisionnement echoue. Verification manuelle requise avant relance."
+        short_message = (message or "Erreur inconnue").replace("\x00", "")[:900]
+        self.audit.record(
+            "request_provisioning_failed",
+            f"Provisionnement echoue pour la demande #{request_id}: {short_message}",
+            severity=AuditSeverity.danger,
+            actor_id=actor.id,
+            request_id=request_id,
+        )
+        await self.session.commit()
 
     async def patch(self, request_id: int, payload: VmRequestPatch, actor: User) -> VmRequest:
         request = await self.requests.get(request_id)
         if not request:
             raise ApiError(404, "vm_request_not_found", "Demande VM introuvable.")
         if payload.validator_id and payload.validator_id != actor.id:
-            raise ApiError(403, "validator_mismatch", "validator_id doit correspondre à l'utilisateur connecté.")
+            raise ApiError(403, "validator_mismatch", "validator_id doit correspondre a l'utilisateur connecte.")
 
         request.status = payload.status
         request.validator_id = actor.id
@@ -202,7 +238,7 @@ class VmRequestService:
         severity = AuditSeverity.success if payload.status == RequestStatus.approved else AuditSeverity.warning
         self.audit.record(
             f"request_{payload.status.value}",
-            f"Demande #{request.id} mise à jour vers {payload.status.value}.",
+            f"Demande #{request.id} mise a jour vers {payload.status.value}.",
             severity=severity,
             actor_id=actor.id,
             request_id=request.id,
@@ -212,36 +248,26 @@ class VmRequestService:
             self.notifications.create(
                 request.requester_id,
                 NotificationType.vm_request_approved if is_approved else NotificationType.vm_request_refused,
-                "Demande VM approuvée" if is_approved else "Demande VM refusée",
-                f"Votre demande #{request.id} a été {'approuvée' if is_approved else 'refusée'}.",
+                "Demande VM approuvee" if is_approved else "Demande VM refusee",
+                f"Votre demande #{request.id} a ete {'approuvee' if is_approved else 'refusee'}.",
             )
         await self.session.commit()
         await self.session.refresh(request)
         return request
 
-    async def mark_provisioning_requested(self, request_id: int, actor: User) -> VmRequest:
-        """Lance le provisionnement Terraform pour une demande approuvée ou en attente.
+    @staticmethod
+    def _short_log(message: str, limit: int = 900) -> str:
+        clean = (message or "").replace("\x00", "").strip()
+        if len(clean) <= limit:
+            return clean
+        return clean[-limit:]
 
-        FIX Bug 5 — idempotence :
-        - Si la demande est déjà en provisioning/provisioned → retour silencieux.
-        - Accepte pending ET approved (le validator peut provisionner directement).
-        - Lève 409 uniquement pour les états terminaux (refused, failed, destroyed, expired).
-        """
-        request = await self.requests.get(request_id)
+    async def mark_provisioning_requested(self, request_id: int, actor: User) -> VmRequest:
+        request = await self._get_request_for_update(request_id)
         if not request:
             raise ApiError(404, "vm_request_not_found", "Demande VM introuvable.")
-
-        # Idempotence : déjà en cours ou terminé → OK
-        if request.status in {RequestStatus.provisioning, RequestStatus.provisioned}:
-            return request
-
-        # États acceptés pour déclencher le provisionnement
-        if request.status not in {RequestStatus.pending, RequestStatus.approved}:
-            raise ApiError(
-                409,
-                "vm_request_not_provisionable",
-                f"Impossible de provisionner une demande en statut '{request.status.value}'.",
-            )
+        if request.status != RequestStatus.approved:
+            raise ApiError(409, "vm_request_not_approved", "Seule une demande approuvee peut passer en provisionnement.")
 
         await self._ensure_not_already_provisioned(request)
         request.status = RequestStatus.provisioning
@@ -253,13 +279,108 @@ class VmRequestService:
         )
         await self.session.commit()
         try:
-            await self._provision_request(request, actor)
+            ansible_jobs = await self._provision_request(request, actor)
             await self.session.commit()
+            self._schedule_ansible_jobs(ansible_jobs)
         except ApiError as exc:
             await self._mark_provisioning_failed(request_id, actor, exc.message)
             raise
         except Exception as exc:
-            await self._mark_provisioning_failed(request_id, actor, str(exc) or exc.__class__.__name__)
-            raise ApiError(500, "provisioning_failed", f"Provisionnement echoue: {str(exc) or exc.__class__.__name__}") from exc
+            message = str(exc) or exc.__class__.__name__
+            await self._mark_provisioning_failed(request_id, actor, message)
+            raise ApiError(500, "provisioning_failed", f"Provisionnement echoue: {message}") from exc
         await self.session.refresh(request)
         return request
+
+    async def _get_request_for_update(self, request_id: int) -> VmRequest | None:
+        return await self.session.scalar(
+            select(VmRequest).where(VmRequest.id == request_id).with_for_update()
+        )
+
+    def _schedule_ansible_jobs(self, jobs: list[AnsibleProvisioningJob]) -> None:
+        for job in jobs:
+            asyncio.create_task(self._run_ansible_job(job))
+
+    @staticmethod
+    async def _run_ansible_job(job: AnsibleProvisioningJob) -> None:
+        async with SessionLocal() as session:
+            audit = AuditService(session)
+            ansible = AnsibleService()
+            vm = await session.get(VirtualMachine, job.vm_id)
+            if not vm:
+                return
+            vm.status = VmStatus.configuring
+            target_ip = AnsibleService.select_target_ip(job.vm_ip or "")
+            audit.record(
+                "vm_ansible_started",
+                f"Configuration Ansible lancee pour {job.vm_name} via {target_ip}.",
+                severity=AuditSeverity.info,
+                actor_id=job.actor_id,
+                request_id=job.request_id,
+                vm_id=job.vm_id,
+            )
+            await session.commit()
+            try:
+                result = await ansible.run_playbook(
+                    vm_ip=job.vm_ip,
+                    template_type=job.template_type,
+                    vm_name=job.vm_name,
+                    course_name=job.course_name,
+                    end_date=job.end_date,
+                    request_id=job.request_id,
+                    ssh_user=job.ssh_user,
+                )
+            except ApiError as exc:
+                vm.status = VmStatus.error
+                audit.record(
+                    "vm_ansible_failed",
+                    f"Configuration Ansible echouee pour {job.vm_name}: {VmRequestService._short_log(exc.message)}",
+                    severity=AuditSeverity.danger,
+                    actor_id=job.actor_id,
+                    request_id=job.request_id,
+                    vm_id=job.vm_id,
+                )
+                await session.commit()
+                return
+            except Exception as exc:
+                vm.status = VmStatus.error
+                message = str(exc) or exc.__class__.__name__
+                audit.record(
+                    "vm_ansible_failed",
+                    f"Configuration Ansible interrompue pour {job.vm_name}: {VmRequestService._short_log(message)}",
+                    severity=AuditSeverity.danger,
+                    actor_id=job.actor_id,
+                    request_id=job.request_id,
+                    vm_id=job.vm_id,
+                )
+                await session.commit()
+                return
+            if result.skipped:
+                vm.status = VmStatus.running
+                audit.record(
+                    "vm_ansible_skipped",
+                    f"Configuration Ansible ignoree pour {job.vm_name}: {VmRequestService._short_log(result.stdout)}",
+                    severity=AuditSeverity.info,
+                    actor_id=job.actor_id,
+                    request_id=job.request_id,
+                    vm_id=job.vm_id,
+                )
+            else:
+                vm.status = VmStatus.running
+                audit.record(
+                    "vm_ansible_completed",
+                    f"Configuration Ansible terminee pour {job.vm_name}. {VmRequestService._ansible_summary(result.stdout)}",
+                    severity=AuditSeverity.success,
+                    actor_id=job.actor_id,
+                    request_id=job.request_id,
+                    vm_id=job.vm_id,
+                )
+            await session.commit()
+
+    @staticmethod
+    def _ansible_summary(stdout: str) -> str:
+        clean = (stdout or "").replace("\x00", "").strip()
+        if "PLAY RECAP" in clean:
+            recap = clean.split("PLAY RECAP", 1)[1]
+            return "PLAY RECAP" + VmRequestService._short_log(recap, limit=500)
+        return VmRequestService._short_log(clean, limit=500)

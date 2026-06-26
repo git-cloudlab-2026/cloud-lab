@@ -1,0 +1,84 @@
+---
+- name: Wait for SSH to become available
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    timeout: 300
+
+- name: Refresh package index
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - python3
+      - git
+      - curl
+      - vim
+      - htop
+      - sudo
+      - prometheus-node-exporter
+    state: present
+
+- name: Enable node_exporter metrics service
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true
+
+- name: Create student user
+  ansible.builtin.user:
+    name: "{{ student_user }}"
+    shell: /bin/bash
+    create_home: true
+    groups: sudo
+    append: true
+
+- name: Allow student passwordless sudo
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ student_user }}"
+    content: "{{ student_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: Read default user authorized keys
+  ansible.builtin.slurp:
+    src: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+  register: default_authorized_keys
+  ignore_errors: true
+
+- name: Create student SSH directory
+  ansible.builtin.file:
+    path: "/home/{{ student_user }}/.ssh"
+    state: directory
+    owner: "{{ student_user }}"
+    group: "{{ student_user }}"
+    mode: "0700"
+
+- name: Reuse VM SSH key for student user
+  ansible.builtin.copy:
+    dest: "/home/{{ student_user }}/.ssh/authorized_keys"
+    content: "{{ default_authorized_keys.content | b64decode }}"
+    owner: "{{ student_user }}"
+    group: "{{ student_user }}"
+    mode: "0600"
+  when: default_authorized_keys is succeeded
+
+- name: Install Cloud Lab MOTD
+  ansible.builtin.copy:
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Cloud Lab VM
+      ============
+      VM: {{ vm_name }}
+      Course: {{ course_name }}
+      Template: {{ template_type }}
+      End date: {{ end_date }}
+
+      This environment is managed by Cloud Lab Control Center.

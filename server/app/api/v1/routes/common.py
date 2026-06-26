@@ -6,6 +6,7 @@ from app.db.session import get_session
 from app.repositories.catalog import CourseRepository, VmTemplateRepository
 from app.repositories.vms import CostRecordRepository, VmMetricRepository
 from app.schemas.common import CostRecordRead, CourseRead, VmMetricRead, VmTemplateRead
+from app.services.cost_service import CostService
 
 router = APIRouter()
 
@@ -30,5 +31,7 @@ async def vm_metrics(limit: int = 100, session: AsyncSession = Depends(get_sessi
 
 @router.get("/cost-records", response_model=dict)
 async def cost_records(session: AsyncSession = Depends(get_session), _user=Depends(get_current_user)):
+    await CostService(session).refresh_all()
+    await session.commit()
     rows = await CostRecordRepository(session).list(limit=500)
     return {"data": [CostRecordRead.model_validate(row) for row in rows]}

@@ -16,7 +16,7 @@
   Pourquoi ce choix:
   - les statuts sont previsibles pour le portail, l'infra et le dashboard;
   - chaque transition garde un timestamp exploitable;
-  - le cout estime est calcule a la demande, le cout reel a partir de la duree d'usage;
+  - le cout demande est calcule a la demande, le cout operationnel a partir de la duree d'usage;
   - les prix ne sont pas poses au hasard: ils partent d'une reference publique Infomaniak
     4 CPU / 8 GB RAM / 50 GB stockage = 16.10 CHF/mois, hors TVA, puis sont proratises
     selon CPU/RAM/disque et convertis en cout horaire;
@@ -60,6 +60,7 @@ const PERMISSIONS = {
   approveRequest: ["validator", "admin"],
   refuseRequest: ["validator", "admin"],
   provisionVm: ["validator", "admin"],
+  retryAnsible: ["validator", "admin"],
   destroyExpiredVms: ["admin"],
   resetData: ["admin"],
   exportCsv: ["student", "trainer", "validator", "admin"],
@@ -95,11 +96,12 @@ const PRICING_MODEL = {
   }
 };
 
-const STATUS_ORDER = ["pending", "approved", "provisioning", "active", "expiring", "expired", "destroyed"];
+const STATUS_ORDER = ["pending", "approved", "provisioning", "configuring", "active", "expiring", "expired", "destroyed"];
 const VALID_TRANSITIONS = {
   pending: ["approved", "refused", "error"],
   approved: ["provisioning", "refused", "error"],
-  provisioning: ["active", "error", "expired"],
+  provisioning: ["configuring", "active", "error", "expired"],
+  configuring: ["active", "error", "expired"],
   active: ["expiring", "expired", "error"],
   expiring: ["expired", "destroyed", "error"],
   expired: ["destroyed", "error"],
@@ -500,6 +502,7 @@ function mapApiRole(role) {
 
 function mapApiStatus(status) {
   const map = {
+    configuring: "configuring",
     running: "active",
     stopped: "expired",
     down: "error"
@@ -509,6 +512,7 @@ function mapApiStatus(status) {
 
 function mapFrontendVmStatus(status) {
   const map = {
+    configuring: "configuring",
     active: "running",
     expiring: "running",
     expired: "expired",
@@ -904,7 +908,19 @@ function formatHourlyCost(value) {
 
 function formatDateTime(value) {
   if (!value) return "-";
-  return value.replace("T", " ").slice(0, 16);
+  const rawValue = String(value);
+  const hasTimezone = /([zZ]|[+-]\d{2}:\d{2})$/.test(rawValue);
+  const date = new Date(hasTimezone ? rawValue : `${rawValue}Z`);
+  if (Number.isNaN(date.getTime())) return rawValue.replace("T", " ").slice(0, 16);
+  return new Intl.DateTimeFormat("fr-CH", {
+    timeZone: "Europe/Zurich",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date).replace(",", "");
 }
 
 function canTransition(current, next) {
@@ -1022,6 +1038,7 @@ function statusBadge(status) {
     pending: "En attente",
     approved: "Approuvée",
     provisioning: "Provisionnement",
+    configuring: "Configuration",
     active: "Active",
     expiring: "Expire bientôt",
     expired: "Expirée",
@@ -1182,7 +1199,7 @@ const query = {
       ["VM expirees", expired, "danger"],
       ["VM en erreur", error, "danger"],
       ["VM détruites", destroyed, "neutral"],
-      ["Coût réel actuel", formatCost(realCost), "accent"]
+      ["Coût opérationnel", formatCost(realCost), "accent"]
     ];
   }
 };
@@ -1571,7 +1588,7 @@ function renderDashboardCommandCenter() {
         <div class="ring-meter" style="--value:${healthScore}"><b>${activeVms.length}</b><small>VM actives</small></div>
       </div>
       <div class="command-cost-card">
-        <span>Cout reel courant</span>
+        <span>Cout operationnel</span>
         <strong>${formatCost(realCost)}</strong>
         <p>${pendingRequests.length} demande(s) en attente - ${expiredVms.length} VM a nettoyer</p>
       </div>
@@ -1688,7 +1705,7 @@ function renderDashboardCommandCenter() {
 function renderKpis() {
   document.querySelector("#kpiGrid").innerHTML = query.kpis()
     .map(([label, value, tone]) => {
-      const featuredClass = label === "Coût réel actuel" ? " kpi-featured" : "";
+      const featuredClass = label === "Coût opérationnel" ? " kpi-featured" : "";
       return `<div class="kpi kpi-${tone}${featuredClass}"><span>${label}</span><strong>${value}</strong></div>`;
     })
     .join("");
@@ -1806,7 +1823,9 @@ function renderVms() {
       const request = byId(state.requests, vm.requestId);
       const template = templateForRequest(request);
       const canDestroy = can("destroyExpiredVms") && vm.status !== "destroyed";
+      const canRetryAnsible = can("retryAnsible") && vm.status === "error";
       const isDestroying = pendingVmActions.has(String(vm.id));
+      const isRetrying = pendingVmActions.has(`ansible-${vm.id}`);
       return `
         <tr>
           <td>${vm.name}</td>
@@ -1818,7 +1837,9 @@ function renderVms() {
           <td class="num">${formatCost(realVmCost(vm))}</td>
           <td class="num">${formatHourlyCost(template.hourlyCostChf)}</td>
           <td>
-            ${canDestroy ? `<button class="action-button refuse" data-destroy-vm="${vm.id}" ${isDestroying ? "disabled" : ""}>${isDestroying ? "Destruction..." : "Détruire"}</button>` : "-"}
+            ${canRetryAnsible ? `<button class="action-button provision" data-retry-ansible="${vm.id}" ${isRetrying ? "disabled" : ""}>${isRetrying ? "Configuration..." : "Relancer Ansible"}</button>` : ""}
+            ${canDestroy ? `<button class="action-button refuse" data-destroy-vm="${vm.id}" ${isDestroying ? "disabled" : ""}>${isDestroying ? "Destruction..." : "Détruire"}</button>` : ""}
+            ${!canRetryAnsible && !canDestroy ? "-" : ""}
           </td>
         </tr>
       `;
@@ -1836,7 +1857,7 @@ function renderAlerts() {
             <div class="list-item">
               <div>
                 <strong>${vm.name}</strong>
-                <span>${owner.fullName} - fin ${vm.endDate} - coût réel ${formatCost(realVmCost(vm))}</span>
+                <span>${owner.fullName} - fin ${vm.endDate} - coût operationnel ${formatCost(realVmCost(vm))}</span>
               </div>
               <span class="badge status-${tone === "red" ? "error" : "expiring"}">${label}</span>
             </div>
@@ -2181,7 +2202,7 @@ async function provisionRequest(requestId) {
       sshUser: "student",
       sshKey: `SHA256:lab-${slug}`,
       network,
-      // Décalage volontaire pour éviter un coût réel à 0 CHF sur une VM tout juste provisionnée, plus réaliste en démo.
+      // Décalage volontaire pour éviter un coût operationnel à 0 CHF sur une VM tout juste provisionnée, plus réaliste en démo.
       createdAt: formatIsoLocal(demoCreatedAt),
       provisionedAt: null,
       startDate: request.startDate,
@@ -2239,12 +2260,46 @@ async function destroyVm(vmId) {
   transitionEntity(vm, "destroyed", "destroyedAt");
   const request = byId(state.requests, vm.requestId);
   if (request && canTransition(request.status, "destroyed")) transitionEntity(request, "destroyed", "destroyedAt");
-  addEvent("vm_destroyed", `VM ${vm.name} détruite manuellement. Coût réel: ${formatCost(realVmCost(vm))}.`, {
+  addEvent("vm_destroyed", `VM ${vm.name} détruite manuellement. Coût operationnel: ${formatCost(realVmCost(vm))}.`, {
     severity: "danger",
     targetType: "vm",
     targetId: vm.id,
     scope: byId(state.users, vm.ownerId)?.className || "-"
   });
+  saveState();
+  renderAll();
+}
+
+async function retryAnsible(vmId) {
+  if (!requirePermission("retryAnsible")) return;
+  const actionKey = `ansible-${vmId}`;
+  if (pendingVmActions.has(actionKey)) return;
+  const vm = byId(state.vms, vmId);
+  if (!vm || vm.status === "destroyed") return;
+
+  if (DATA_MODE === "api") {
+    pendingVmActions.add(actionKey);
+    renderVms();
+    try {
+      await apiRequest(`/virtual-machines/${vmId}/retry-ansible`, { method: "POST" });
+      await refreshFromApiAndRender();
+      alert(`Configuration Ansible relancee pour ${vm.name}.`);
+    } catch (error) {
+      alert(`Relance Ansible impossible: ${error.message}`);
+      await refreshFromApiAndRender();
+    } finally {
+      pendingVmActions.delete(actionKey);
+      renderVms();
+    }
+    return;
+  }
+
+  transitionEntity(vm, "configuring", null);
+  setTimeout(() => {
+    transitionEntity(vm, "active", null);
+    saveState();
+    renderAll();
+  }, 800);
   saveState();
   renderAll();
 }
@@ -2277,7 +2332,7 @@ async function destroyExpiredVms() {
     transitionEntity(vm, "destroyed", "destroyedAt");
     const request = byId(state.requests, vm.requestId);
     if (request && canTransition(request.status, "destroyed")) transitionEntity(request, "destroyed", "destroyedAt");
-    addEvent("vm_destroyed", `VM ${vm.name} détruite après expiration. Coût réel: ${formatCost(realVmCost(vm))}.`, {
+    addEvent("vm_destroyed", `VM ${vm.name} détruite après expiration. Coût operationnel: ${formatCost(realVmCost(vm))}.`, {
       severity: "danger",
       targetType: "vm",
       targetId: vm.id,
@@ -2365,7 +2420,7 @@ function exportVms() {
       provisioned_at: formatDateTime(vm.provisionedAt),
       end_date: vm.endDate,
       destroyed_at: formatDateTime(vm.destroyedAt),
-      cout_reel_chf: realVmCost(vm).toFixed(2),
+      cout_operationnel_chf: realVmCost(vm).toFixed(2),
       cout_horaire_chf: template.hourlyCostChf.toFixed(4),
       prix_source: PRICING_MODEL.sourceLabel
     };
@@ -2479,7 +2534,9 @@ document.querySelector("#requestsTable").addEventListener("click", (event) => {
 
 document.querySelector("#vmsTable").addEventListener("click", (event) => {
   const destroy = event.target.closest("[data-destroy-vm]");
+  const retryAnsibleButton = event.target.closest("[data-retry-ansible]");
   if (destroy) destroyVm(destroy.dataset.destroyVm);
+  if (retryAnsibleButton) retryAnsible(retryAnsibleButton.dataset.retryAnsible);
 });
 
 initApp();

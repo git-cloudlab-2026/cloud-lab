@@ -6,7 +6,11 @@ network_cidr          = "10.42.0.0/24"
 external_network_name = "ext-net"
 
 allowed_ssh_cidrs = [
-  "0.0.0.0/0", # A restreindre : IP du GIT / VPN
+  "198.51.100.10/32", # Remplacer par IP publique GIT / VPN / admin. Jamais 0.0.0.0/0 en production.
+]
+
+allowed_node_exporter_cidrs = [
+  "198.51.100.10/32", # Remplacer par IP du serveur Prometheus. Jamais 0.0.0.0/0 en production.
 ]
 
 ssh_keypair_name = "cloud-lab-key"

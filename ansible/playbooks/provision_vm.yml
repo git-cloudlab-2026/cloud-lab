@@ -1,0 +1,21 @@
+---
+- name: Configure Cloud Lab student VM
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    template_type: "{{ template_type | default('base') }}"
+    student_user: "{{ student_user | default('student') }}"
+    vm_name: "{{ vm_name | default(inventory_hostname) }}"
+    course_name: "{{ course_name | default('Cloud Lab') }}"
+    end_date: "{{ end_date | default('non definie') }}"
+  roles:
+    - role: base
+    - role: admin_linux
+      when: template_type == "admin_linux"
+    - role: dev_web
+      when: template_type == "dev_web"
+    - role: data_science
+      when: template_type == "data_science"
+    - role: cybersecurity
+      when: template_type == "cybersecurity"

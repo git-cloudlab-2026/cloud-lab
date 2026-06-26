@@ -11,3 +11,9 @@ scrape_configs:
         labels:
           service: cloud-lab
           environment: local
+
+  - job_name: cloud-lab-vm-node-exporter
+    metrics_path: /metrics
+    http_sd_configs:
+      - url: http://backend:8000/metrics/vm-targets
+        refresh_interval: 30s

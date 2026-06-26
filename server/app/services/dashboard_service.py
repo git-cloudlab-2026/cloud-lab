@@ -1,12 +1,17 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.cost_service import CostService
+
 
 class DashboardService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def summary(self) -> dict:
+        await CostService(self.session).refresh_all()
+        await self.session.commit()
+
         queries = {
             "active_vms": "SELECT COUNT(*)::int AS value FROM virtual_machines WHERE status = 'running'",
             "pending_requests": "SELECT COUNT(*)::int AS value FROM vm_requests WHERE status = 'pending'",

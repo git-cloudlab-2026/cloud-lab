@@ -1,18 +1,18 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.enums import AuditSeverity, NotificationType, VmStatus
-from app.domain.models import Notification, User, VirtualMachine
+from app.domain.models import VirtualMachine
 from app.services.audit_service import AuditService
 from app.services.notification_service import NotificationService
 from app.services.provisioner import get_provisioner
 
 
 class VmLifecycleJob:
-    """Tache de cycle de vie: alertes 24h et destruction des VM arrivees a date de fin."""
+    """Tache de cycle de vie: expire et detruit les VM arrivees a date de fin."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -51,14 +51,14 @@ class VmLifecycleJob:
     async def destroy_due_vms(self, today: date | None = None) -> list[VirtualMachine]:
         """Detruit reellement les VM dont la date de fin est atteinte.
 
-        La destruction passe par le provisioner actif, donc le comportement est le
-        meme que le bouton "Detruire" du portail.
+        La destruction passe par le provisioner applicatif (OpenStack/Terraform/mock),
+        donc le comportement est le meme que le bouton "Detruire" du portail.
         """
         current_date = today or datetime.now(ZoneInfo("Europe/Zurich")).date()
         result = await self.session.execute(
             select(VirtualMachine).where(
                 VirtualMachine.end_date <= current_date,
-                VirtualMachine.status.in_([VmStatus.running, VmStatus.stopped, VmStatus.expired]),
+                VirtualMachine.status.in_([VmStatus.configuring, VmStatus.running, VmStatus.stopped, VmStatus.expired]),
             )
         )
         vms = list(result.scalars().all())
@@ -116,57 +116,3 @@ class VmLifecycleJob:
             destroyed.append(vm)
 
         return destroyed
-
-    async def notify_expiring_soon_vms(self, today: date | None = None) -> list[VirtualMachine]:
-        current_date = today or datetime.now(ZoneInfo("Europe/Zurich")).date()
-        target_date = current_date + timedelta(days=1)
-        result = await self.session.execute(
-            select(VirtualMachine).where(
-                VirtualMachine.end_date == target_date,
-                VirtualMachine.status.in_([VmStatus.running, VmStatus.stopped, VmStatus.down]),
-            )
-        )
-        vms = list(result.scalars().all())
-        notified: list[VirtualMachine] = []
-
-        for vm in vms:
-            already_notified = await self.session.scalar(
-                select(Notification).where(
-                    Notification.user_id == vm.owner_id,
-                    Notification.type == NotificationType.vm_expiring_soon,
-                    Notification.message.contains(vm.name),
-                )
-            )
-            if already_notified:
-                continue
-
-            owner = await self.session.get(User, vm.owner_id)
-            if not owner:
-                continue
-
-            message = (
-                f"La VM {vm.name} expire le {vm.end_date}. "
-                "Sauvegardez vos travaux et demandez une prolongation si necessaire."
-            )
-            await self.notification_service.create_and_email(
-                owner,
-                NotificationType.vm_expiring_soon,
-                "VM bientot expiree",
-                message,
-                email_subject="Cloud Lab - VM expire dans 24h",
-            )
-            self.audit_service.record(
-                "vm_expiring_soon",
-                f"Alerte 24h envoyee pour la VM {vm.name}.",
-                severity=AuditSeverity.warning,
-                vm_id=vm.id,
-            )
-            notified.append(vm)
-
-        await self.session.flush()
-        return notified
-
-    async def run(self, today: date | None = None) -> dict[str, int]:
-        expiring_soon = await self.notify_expiring_soon_vms(today)
-        destroyed = await self.destroy_due_vms(today)
-        return {"expiring_soon": len(expiring_soon), "destroyed": len(destroyed)}

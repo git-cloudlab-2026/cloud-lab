@@ -14,3 +14,4 @@ cryptography==44.0.0
 python-jose[cryptography]==3.3.0
 pytest==8.3.4
 pytest-asyncio==0.25.0
+ansible-core==2.18.1

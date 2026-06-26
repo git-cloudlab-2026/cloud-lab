@@ -41,9 +41,15 @@ variable "dns_servers" {
 }
 
 variable "allowed_ssh_cidrs" {
-  description = "CIDR autorises a se connecter en SSH (22) aux VM. Restreindre en production."
+  description = "CIDR autorises a se connecter en SSH (22) aux VM. Remplacer par l'IP publique GIT/VPN/admin en production."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["198.51.100.10/32"]
+}
+
+variable "allowed_node_exporter_cidrs" {
+  description = "CIDR autorises a interroger node_exporter (9100) sur les VM. Remplacer par l'IP du serveur Prometheus."
+  type        = list(string)
+  default     = ["198.51.100.10/32"]
 }
 
 variable "image_name" {
@@ -59,16 +65,15 @@ variable "default_flavor_name" {
 }
 
 variable "ssh_keypair_name" {
-  description = "Nom de la keypair OpenStack existante a utiliser pour l'acces SSH aux VM."
+  description = "Nom de la keypair OpenStack a utiliser/creer pour l'acces SSH aux VM."
   type        = string
   default     = "cloud-lab-key"
 }
 
 variable "ssh_public_key" {
-  description = "Deprecated: la keypair OpenStack est geree hors de ce module."
+  description = "Cle publique SSH (contenu, pas chemin) injectee dans la keypair OpenStack."
   type        = string
   sensitive   = true
-  default     = null
 }
 
 variable "assign_floating_ip" {

@@ -72,6 +72,7 @@ PATCH /api/v1/virtual-machines/{id}/destruction-result
 ## Securite
 
 - Jamais commit : `clouds.yaml`, `*.tfvars` (hors `.example`), `*.tfstate`, `.terraform/`.
-- `allowed_ssh_cidrs` doit etre resserre en dehors du `0.0.0.0/0` de demo.
+- `allowed_ssh_cidrs` doit contenir uniquement l'IP publique GIT/VPN/admin. `0.0.0.0/0` est interdit en production.
+- La key pair officielle est `cloud-lab-key`; ne pas multiplier les cles SSH.
 - Un security group isole par segment (`network_segment`) limite la portee
   d'une classe a l'autre (E1 a E5).

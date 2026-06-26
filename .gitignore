@@ -4,10 +4,10 @@
 !.env.example
 clouds.yaml
 openrc.sh
+secrets/
+cloud-lab-key
 *.pem
 *.key
-cloud-lab-key
-cloud-lab-key.pub
 id_rsa
 id_ed25519
 *.p12
@@ -15,7 +15,6 @@ id_ed25519
 
 # Terraform / OpenTofu
 **/.terraform/
-.terraform-runs/
 .terraform.lock.hcl.bak
 *.tfstate
 *.tfstate.*
@@ -69,6 +68,5 @@ logs/
 
 # Local browser/test artifacts
 .tmp-chrome/
-.docker-local/
 playwright-report/
 test-results/

@@ -1,0 +1,15 @@
+---
+- name: Install administration Linux tools
+  ansible.builtin.apt:
+    name:
+      - openssh-server
+      - net-tools
+      - ufw
+      - fail2ban
+    state: present
+
+- name: Ensure SSH service is enabled
+  ansible.builtin.service:
+    name: ssh
+    state: started
+    enabled: true

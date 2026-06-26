@@ -258,14 +258,46 @@ Important : le backend ne donne pas automatiquement un role sensible a un utilis
 - `GET /api/v1/audit-events`
 - `GET /api/v1/notifications`
 
-## Integration future provisioning
+## Integration provisioning Terraform/OpenTofu
 
-Le backend ne cree aucune VM reelle lui-meme.
+Par defaut, le backend reste en mode demo et ne cree aucune VM reelle lui-meme.
 
 En developpement, `MockTerraformService` simule OpenTofu/Terraform pour tester le
 workflow de bout en bout sans acces Infomaniak OpenStack. Il retourne un id
 provider fictif, une IP privee, un nom de VM, un segment reseau et un fingerprint
 SSH coherents.
+
+Pour activer le provisioning reel, configurer :
+
+```env
+PROVISIONER_MODE=terraform
+TERRAFORM_BINARY=terraform
+TERRAFORM_MODULE_DIR=./infrastructure
+TERRAFORM_WORK_DIR=.terraform-runs
+TERRAFORM_OPENSTACK_CLOUD_NAME=openstack
+TERRAFORM_REGION=dc4-a
+TERRAFORM_PROJECT_PREFIX=cloud-lab
+TERRAFORM_EXTERNAL_NETWORK_NAME=ext-floating1
+TERRAFORM_SSH_PUBLIC_KEY_PATH=~/.ssh/id_ed25519.pub
+```
+
+Utiliser `TERRAFORM_BINARY=tofu` si OpenTofu est installe a la place de
+Terraform.
+
+En mode `terraform`, le backend :
+
+1. copie le module `infrastructure/` dans `.terraform-runs/request-XXXX`;
+2. genere `terraform.auto.tfvars.json` depuis la demande VM;
+3. lance `terraform init`;
+4. lance `terraform apply -auto-approve`;
+5. lit `terraform output -json provisioning_results`;
+6. cree les VMs en base avec `provider_vm_id`, `ip_address`,
+   `network_segment` et `ssh_fingerprint`.
+
+Important : le conteneur backend de developpement monte le dossier
+`infrastructure/`, mais l'image Python slim ne contient pas Terraform par
+defaut. Pour un appel Terraform depuis Docker, installer Terraform/OpenTofu dans
+l'image backend ou utiliser une image backend dediee au provisioning.
 
 Routes de demonstration locale :
 
@@ -276,7 +308,8 @@ POST /api/v1/virtual-machines/{id}/destroy
 GET  /api/v1/virtual-machines/expired
 ```
 
-Il prepare seulement le contrat que la partie Terraform/OpenTofu de Josue utilisera :
+Le contrat manuel reste disponible si le provisioning est orchestre par un job
+externe :
 
 ### Demander le provisioning
 

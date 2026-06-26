@@ -202,6 +202,57 @@ Les metriques disponibles couvrent l'etat applicatif Cloud Lab :
 - disponibilite par VM;
 - dernier CPU/RAM/disque connu par VM.
 
+## Configuration automatique Ansible
+
+Le backend peut lancer Ansible automatiquement apres la creation d'une VM
+OpenStack. Le flux devient :
+
+```text
+Demande approuvee -> VM OpenStack creee -> statut configuring -> Ansible configure la VM -> statut running
+```
+
+Ansible est desactive par defaut pour ne pas casser le developpement local.
+Pour l'activer :
+
+1. placer la cle privee SSH locale dans `secrets/cloud-lab-key`;
+2. verifier que cette cle correspond a la key pair OpenStack `cloud-lab-key`;
+3. mettre ces variables dans `.env` :
+
+```text
+ANSIBLE_ENABLED=true
+ANSIBLE_SSH_PRIVATE_KEY_PATH=/app/secrets/cloud-lab-key
+ANSIBLE_SSH_USER=ubuntu
+ANSIBLE_TIMEOUT_SECONDS=300
+```
+
+Le dossier `secrets/` est ignore par Git. Ne jamais commit la cle privee.
+
+Puis reconstruire le backend :
+
+```powershell
+docker compose up -d --build backend
+docker compose restart backend
+```
+
+Les playbooks sont dans `ansible/` :
+
+- `roles/base` : attente SSH, paquets de base, utilisateur `student`, MOTD, node_exporter;
+- `roles/admin_linux` : OpenSSH, net-tools, ufw, fail2ban;
+- `roles/dev_web` : Node.js, npm, nginx;
+- `roles/data_science` : pip, jupyter, pandas, numpy;
+- `roles/cybersecurity` : nmap, netcat, wireshark-common, john.
+
+Si Ansible echoue, la VM est marquee `error` et l'audit garde la sortie de
+l'erreur. Depuis le parc VM, un administrateur ou validateur peut relancer
+Ansible sans recreer la VM. Cela evite de presenter une VM comme prete alors
+que la configuration n'a pas abouti.
+
+Pour le monitoring reel par VM, le role de base installe
+`prometheus-node-exporter`. Prometheus decouvre les VMs actives via
+`/metrics/vm-targets` et scrape ensuite le port `9100` de chaque VM. En
+production, `TERRAFORM_ALLOWED_NODE_EXPORTER_CIDRS` doit contenir uniquement
+l'IP publique du serveur Prometheus ou du VPN autorise.
+
 ## Authentification
 
 ### Mode developpement : JWT local

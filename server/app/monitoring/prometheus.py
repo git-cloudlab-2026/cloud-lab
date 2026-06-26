@@ -2,10 +2,14 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
+from app.domain.enums import VmStatus
 from app.domain.models import CostRecord, VirtualMachine, VmMetric, VmRequest
+from app.services.ansible_service import AnsibleService
+from app.services.cost_service import CostService
 
 
 CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
@@ -31,6 +35,9 @@ def _sample(name: str, labels: dict[str, Any], value: Any) -> str:
 
 async def render_prometheus_metrics() -> Response:
     async with SessionLocal() as session:
+        await CostService(session).refresh_all()
+        await session.commit()
+
         vm_counts = await session.execute(
             select(VirtualMachine.status, func.count(VirtualMachine.id)).group_by(VirtualMachine.status)
         )
@@ -104,3 +111,34 @@ async def render_prometheus_metrics() -> Response:
             lines.append(_sample("cloud_lab_vm_disk_usage_percent", labels, metric.disk_usage_percent))
 
     return Response("\n".join(lines) + "\n", media_type=CONTENT_TYPE_LATEST)
+
+
+async def render_prometheus_vm_targets() -> JSONResponse:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(VirtualMachine)
+            .where(VirtualMachine.status == VmStatus.running)
+            .where(VirtualMachine.ip_address.is_not(None))
+            .order_by(VirtualMachine.id)
+        )
+        vms = list(result.scalars())
+
+    targets = []
+    for vm in vms:
+        target_ip = AnsibleService.select_target_ip(vm.ip_address or "")
+        if not target_ip:
+            continue
+        targets.append(
+            {
+                "targets": [f"{target_ip}:9100"],
+                "labels": {
+                    "job": "cloud-lab-vm-node-exporter",
+                    "vm": vm.name,
+                    "vm_id": str(vm.id),
+                    "owner_id": str(vm.owner_id),
+                    "provider_vm_id": vm.provider_vm_id or "",
+                    "network_segment": vm.network_segment or "",
+                },
+            }
+        )
+    return JSONResponse(targets)

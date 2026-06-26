@@ -39,10 +39,7 @@ class MockTerraformService:
         )
 
     async def create_vms(self, request: VmRequest, template: VmTemplate, owner: User) -> list[MockTerraformVm]:
-        return [
-            await self.create_vm(request, template, owner, index)
-            for index in range(1, request.quantity + 1)
-        ]
+        return [await self.create_vm(request, template, owner, index) for index in range(1, request.quantity + 1)]
 
     async def destroy_vm(self, provider_vm_id: str | None) -> bool:
         settings = get_settings()

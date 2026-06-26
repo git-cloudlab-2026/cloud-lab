@@ -1,18 +1,8 @@
-"""seed.py — données de démonstration pour Cloud Lab.
-
-Usage:
-  python -m scripts.seed              # Toujours TRUNCATE + réinsérer (reset complet)
-  python -m scripts.seed --if-empty   # Ne fait rien si des utilisateurs existent déjà
-
-FIX Bug 7: le docker-compose appelle `python -m scripts.seed --if-empty` pour éviter
-de remettre à zéro les données réelles (VM, demandes) à chaque redémarrage du conteneur.
-"""
-
 import asyncio
-import sys
 
 from sqlalchemy import text
 
+from app.core.config import get_settings
 from app.db.session import SessionLocal
 
 
@@ -53,7 +43,9 @@ INSERT INTO vm_templates (id, course_id, name, description, cpu, ram_gb, disk_gb
 (2, 2, 'Developpement Web', 'VM avec Git, Node.js, Python et PostgreSQL client.', 2, 4, 60, 0.0600, 'ansible/dev-web.yml'),
 (3, 3, 'Science des donnees', 'VM avec Python, Jupyter, pandas et scikit-learn.', 4, 8, 80, 0.1200, 'ansible/data-science.yml'),
 (4, 4, 'Laboratoire cybersecurite', 'VM isolee avec outils de securite autorises.', 2, 4, 50, 0.0700, 'ansible/cybersecurity-lab.yml');
+"""
 
+DEMO_SQL = """
 INSERT INTO vm_requests (id, requester_id, course_id, template_id, quantity, start_date, end_date, status, request_reason, validator_id, decision_comment) VALUES
 (1, 100, 1, 1, 1, '2026-06-17', '2026-06-24', 'provisioned', 'TP services Linux', 2, 'Demande conforme.'),
 (2, 101, 2, 2, 1, '2026-06-18', '2026-06-25', 'approved', 'Projet web final', 2, 'OK pour le module.'),
@@ -70,13 +62,19 @@ INSERT INTO vm_metrics (id, vm_id, cpu_usage_percent, ram_usage_percent, disk_us
 (2, 1, 8.10, 42.70, 31.20, 'up', '2026-06-16 11:00:00+02'),
 (3, 2, 0.20, 10.10, 25.00, 'down', '2026-06-16 11:00:00+02');
 
+INSERT INTO cost_records (id, vm_id, cost_date, hours_running, cost_estimate_chf) VALUES
+(1, 1, '2026-06-16', 8.00, 0.40),
+(2, 2, '2026-06-16', 2.00, 0.14);
+
 INSERT INTO audit_events (id, actor_id, request_id, vm_id, event_type, severity, event_message) VALUES
 (1, 100, 1, NULL, 'request_created', 'success', 'Un etudiant E1 a cree une demande Linux Admin.'),
 (2, 2, 1, NULL, 'request_approved', 'success', 'Nadia a approuve la demande.'),
 (3, NULL, 1, 1, 'vm_created', 'success', 'La VM git-linux-e1-01-001 a ete creee.'),
 (4, NULL, 1, 1, 'ansible_completed', 'success', 'Le playbook Linux Admin est termine.'),
 (5, NULL, 5, 2, 'vm_expired', 'warning', 'La VM git-cyber-e1-03-001 est arrivee a expiration.');
+"""
 
+SEQUENCES_SQL = """
 SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1), true);
 SELECT setval(pg_get_serial_sequence('courses', 'id'), COALESCE((SELECT MAX(id) FROM courses), 1), true);
 SELECT setval(pg_get_serial_sequence('vm_templates', 'id'), COALESCE((SELECT MAX(id) FROM vm_templates), 1), true);
@@ -89,28 +87,23 @@ SELECT setval(pg_get_serial_sequence('notifications', 'id'), COALESCE((SELECT MA
 """
 
 
-async def has_existing_data(session) -> bool:
-    """Retourne True si des utilisateurs existent déjà en base."""
-    result = await session.execute(text("SELECT COUNT(*) FROM users"))
-    count = result.scalar_one()
-    return count > 0
+async def main() -> None:
+    settings = get_settings()
+    load_demo_data = not (settings.provisioner_mode in {"openstack", "terraform"} and settings.real_provisioning_enabled)
+    sql = SEED_SQL
+    if load_demo_data:
+        sql += DEMO_SQL
+    sql += SEQUENCES_SQL
 
-
-async def main(if_empty: bool = False) -> None:
     async with SessionLocal() as session:
-        if if_empty and await has_existing_data(session):
-            print("Seed ignoré : des données existent déjà (--if-empty). Aucun TRUNCATE effectué.")
-            return
-
-        for statement in SEED_SQL.split(";"):
+        for statement in sql.split(";"):
             statement = statement.strip()
             if statement:
                 await session.execute(text(statement))
         await session.commit()
-
-    print("Seed PostgreSQL terminé : 5 classes E1-E5, 25 élèves par classe.")
+    mode = "avec donnees demo" if load_demo_data else "sans VM demo en mode provisioning reel"
+    print(f"Seed PostgreSQL termine: 5 classes E1-E5, 25 eleves par classe, {mode}.")
 
 
 if __name__ == "__main__":
-    if_empty_flag = "--if-empty" in sys.argv
-    asyncio.run(main(if_empty=if_empty_flag))
+    asyncio.run(main())

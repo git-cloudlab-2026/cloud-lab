@@ -10,7 +10,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import ApiError, api_error_handler, unhandled_error_handler
 from app.jobs.scheduler import create_scheduler, run_lifecycle_once
-from app.monitoring.prometheus import render_prometheus_metrics
+from app.monitoring.prometheus import render_prometheus_metrics, render_prometheus_vm_targets
 
 
 def create_app() -> FastAPI:
@@ -66,6 +66,10 @@ def create_app() -> FastAPI:
     @app.get("/metrics", include_in_schema=False)
     async def metrics():
         return await render_prometheus_metrics()
+
+    @app.get("/metrics/vm-targets", include_in_schema=False)
+    async def vm_metric_targets():
+        return await render_prometheus_vm_targets()
 
     return app
 

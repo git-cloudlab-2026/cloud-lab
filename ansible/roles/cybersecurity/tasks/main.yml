@@ -1,0 +1,16 @@
+---
+- name: Preseed wireshark non-root capture setting
+  ansible.builtin.debconf:
+    name: wireshark-common
+    question: wireshark-common/install-setuid
+    vtype: boolean
+    value: "false"
+
+- name: Install cybersecurity lab tools
+  ansible.builtin.apt:
+    name:
+      - nmap
+      - netcat-openbsd
+      - wireshark-common
+      - john
+    state: present

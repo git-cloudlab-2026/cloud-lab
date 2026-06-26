@@ -1,4 +1,4 @@
-.PHONY: help install dev up down logs migrate seed test lint infra-init infra-fmt infra-validate infra-plan infra-apply infra-output
+.PHONY: help install dev up down logs migrate seed test lint sync-terraform infra-init infra-fmt infra-validate infra-plan infra-apply infra-output
 
 help:
 	@echo "Cloud Lab commands"
@@ -8,6 +8,7 @@ help:
 	@echo "  make migrate        Run Alembic migrations in Docker"
 	@echo "  make seed           Seed demo data in Docker"
 	@echo "  make test           Run backend tests"
+	@echo "  make sync-terraform Import Terraform outputs into backend DB"
 	@echo "  make infra-init     Terraform init"
 	@echo "  make infra-plan     Terraform plan"
 	@echo "  make infra-apply    Terraform apply"
@@ -38,6 +39,9 @@ test:
 
 lint:
 	cd server && python -m compileall app scripts -q
+
+sync-terraform:
+	cd server && python -m scripts.sync_terraform_outputs
 
 infra-init:
 	cd infrastructure && terraform init

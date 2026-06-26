@@ -21,6 +21,7 @@ class RequestStatus(str, Enum):
 
 class VmStatus(str, Enum):
     creating = "creating"
+    configuring = "configuring"
     running = "running"
     stopped = "stopped"
     down = "down"

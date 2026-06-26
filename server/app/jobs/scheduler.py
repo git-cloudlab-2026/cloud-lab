@@ -8,54 +8,28 @@ from app.jobs.lifecycle import VmLifecycleJob
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler(timezone="Europe/Zurich")
 
-
-async def run_lifecycle_job() -> None:
+async def run_lifecycle_once() -> None:
     async with SessionLocal() as session:
-        result = await VmLifecycleJob(session).run()
-        await session.commit()
-        logger.info(
-            "Lifecycle job finished: %s expiring soon, %s destroyed",
-            result["expiring_soon"],
-            result["destroyed"],
-        )
+        job = VmLifecycleJob(session)
+        destroyed = await job.destroy_due_vms()
+        if destroyed:
+            logger.info("Lifecycle: %s VM detruite(s) automatiquement.", len(destroyed))
 
 
-def start_scheduler() -> None:
+def create_scheduler() -> AsyncIOScheduler | None:
     settings = get_settings()
     if not settings.lifecycle_scheduler_enabled:
-        logger.info("Lifecycle scheduler disabled")
-        return
-    if scheduler.running:
-        return
+        return None
 
+    scheduler = AsyncIOScheduler(timezone="Europe/Zurich")
     scheduler.add_job(
-        run_lifecycle_job,
+        run_lifecycle_once,
         "interval",
         seconds=settings.lifecycle_scheduler_interval_seconds,
-        id="lifecycle-hourly",
+        id="vm_lifecycle_destroy_due_vms",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
     )
-    # Extinction nuit/week-end: second passage planifie pour appliquer les fins de vie
-    # meme si le passage horaire a ete manque.
-    scheduler.add_job(
-        run_lifecycle_job,
-        "cron",
-        hour="20",
-        minute="0",
-        id="lifecycle-nightly-check",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.start()
-    logger.info("Lifecycle scheduler started")
-
-
-def stop_scheduler() -> None:
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-        logger.info("Lifecycle scheduler stopped")
+    return scheduler

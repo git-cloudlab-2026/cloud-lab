@@ -1,0 +1,14 @@
+---
+- name: Install web development tools
+  ansible.builtin.apt:
+    name:
+      - nodejs
+      - npm
+      - nginx
+    state: present
+
+- name: Ensure nginx is enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

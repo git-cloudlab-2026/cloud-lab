@@ -19,8 +19,24 @@
       "title": "VM running",
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "targets": [
-        { "expr": "sum(cloud_lab_vms_total{status=\"running\"})", "legendFormat": "running", "refId": "A" }
+        {
+          "expr": "sum(cloud_lab_vms_total{status=\"running\"})",
+          "legendFormat": "running",
+          "refId": "A"
+        }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
         "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
         "orientation": "auto",
@@ -36,7 +52,11 @@
       "title": "Demandes en attente",
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "targets": [
-        { "expr": "sum(cloud_lab_requests_total{status=\"pending\"})", "legendFormat": "pending", "refId": "A" }
+        {
+          "expr": "sum(cloud_lab_requests_total{status=\"pending\"})",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
       ],
       "options": {
         "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
@@ -53,10 +73,16 @@
       "title": "Cout estime total",
       "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
       "targets": [
-        { "expr": "cloud_lab_cost_estimate_chf_total", "legendFormat": "CHF", "refId": "A" }
+        {
+          "expr": "cloud_lab_cost_estimate_chf_total",
+          "legendFormat": "CHF",
+          "refId": "A"
+        }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "currencyCHF" },
+        "defaults": {
+          "unit": "currencyCHF"
+        },
         "overrides": []
       },
       "options": {
@@ -74,8 +100,25 @@
       "title": "VM en erreur",
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
       "targets": [
-        { "expr": "sum(cloud_lab_vms_total{status=\"error\"})", "legendFormat": "error", "refId": "A" }
+        {
+          "expr": "sum(cloud_lab_vms_total{status=\"error\"})",
+          "legendFormat": "error",
+          "refId": "A"
+        }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
         "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
         "orientation": "auto",
@@ -91,9 +134,20 @@
       "title": "CPU par VM",
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "cloud_lab_vm_cpu_usage_percent", "legendFormat": "{{vm}}", "refId": "A" }
+        {
+          "expr": "cloud_lab_vm_cpu_usage_percent",
+          "legendFormat": "{{vm}}",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
@@ -105,9 +159,20 @@
       "title": "RAM par VM",
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "cloud_lab_vm_ram_usage_percent", "legendFormat": "{{vm}}", "refId": "A" }
+        {
+          "expr": "cloud_lab_vm_ram_usage_percent",
+          "legendFormat": "{{vm}}",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
@@ -119,9 +184,20 @@
       "title": "Disque par VM",
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "cloud_lab_vm_disk_usage_percent", "legendFormat": "{{vm}}", "refId": "A" }
+        {
+          "expr": "cloud_lab_vm_disk_usage_percent",
+          "legendFormat": "{{vm}}",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
@@ -133,9 +209,28 @@
       "title": "Disponibilite VM",
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "cloud_lab_vm_up", "legendFormat": "{{vm}}", "refId": "A" }
+        {
+          "expr": "cloud_lab_vm_up",
+          "legendFormat": "{{vm}}",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": { "defaults": { "min": 0, "max": 1 }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "down", "color": "red" },
+                "1": { "text": "up", "color": "green" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
       "options": {
         "displayMode": "gradient",
         "orientation": "horizontal",
