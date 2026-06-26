@@ -120,9 +120,9 @@ Comptes de demonstration :
 | Email | Mot de passe | Role |
 |---|---|---|
 | `auguy.mabika@git.swiss` | `admin123` | admin |
-| `josue.projet@git.swiss` | `validator123` | validator |
-| `lorenzo.reseau@git.swiss` | `teacher123` | teacher |
-| `rayan.terraform@git.swiss` | `student123` | student |
+| `josue.zongo@git.swiss` | `validator123` | validator |
+| `lorenzo.mele@git.swiss` | `teacher123` | teacher |
+| `rayan.zaghez@git.swiss` | `student123` | student |
 
 Exemple API :
 
@@ -359,9 +359,9 @@ Scenario conseille :
 | Personne | Responsabilite principale |
 |---|---|
 | Auguy Mabika | Frontend, backend FastAPI, workflow applicatif, dashboard, couts, audit, integration globale |
-| Josue | Infrastructure cloud, provisioning OpenStack, validation de la chaine Terraform |
-| Lorenzo | Reseau, securite, isolation, security groups, acces SSH |
-| Rayan | Terraform, automatisation infrastructure, premiers outputs de provisioning |
+| Josue Zongo | Infrastructure cloud, provisioning OpenStack, validation de la chaine Terraform |
+| Lorenzo Mele | Reseau, securite, isolation, security groups, acces SSH |
+| Rayan Zaghez | Terraform, automatisation infrastructure, premiers outputs de provisioning |
 
 Cette section est utile pour la soutenance : elle montre clairement la repartition des responsabilites et evite de melanger les perimetres.
 
