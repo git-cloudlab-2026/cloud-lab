@@ -1,7 +1,7 @@
 data "openstack_images_image_v2" "vm_image" {
   for_each = { for v in var.vm_requests : v.name => v }
 
-name        = coalesce(each.value.image_name, var.image_name)
+  name        = coalesce(each.value.image_name, var.image_name)
   most_recent = true
 }
 
